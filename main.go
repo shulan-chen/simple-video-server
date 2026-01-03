@@ -1,11 +1,13 @@
 package main
 
 import (
-	api "video-server/api"
 	"video-server/api/utils"
+	"video-server/stream"
 )
 
 func main() {
 	utils.InitLogging()
-	api.Start()
+	//api.Start()
+
+	stream.Start()
 }

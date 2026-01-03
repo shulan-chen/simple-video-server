@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>上传音视频文件</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 600px;
+      margin: 50px auto;
+      padding: 20px;
+      background-color: #f9f9f9;
+    }
+    h1 {
+      text-align: center;
+      color: #333;
+    }
+    .upload-container {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    input[type="file"] {
+      width: 100%;
+      margin: 10px 0;
+    }
+    button {
+      width: 100%;
+      padding: 10px;
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 16px;
+    }
+    button:hover {
+      background-color: #45a049;
+    }
+    .note {
+      margin-top: 15px;
+      font-size: 14px;
+      color: #666;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>上传音视频文件</h1>
+
+  <div class="upload-container">
+    <form id="uploadForm" action="http://10.201.144.200:9090/videos/upload/test-video" method="POST" enctype="multipart/form-data">
+      <label for="mediaFile">请选择一个音视频文件：</label>
+      <input
+        type="file"
+        id="mediaFile"
+        name="file"
+        accept="audio/*,video/*"
+        required
+      />
+      <button type="submit">上传文件</button>
+    </form>
+
+    <p class="note">支持的格式：MP3、MP4、WAV、AVI、MOV、OGG、FLAC 等常见音视频格式。</p>
+  </div>
+
+</body>
+</html>
