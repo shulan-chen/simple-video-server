@@ -3,11 +3,12 @@ package dbops
 import (
 	"database/sql"
 	"fmt"
-	"log"
 	"strconv"
 	"time"
 	api "video-server/api/defs"
 	"video-server/api/utils"
+
+	"go.uber.org/zap"
 )
 
 func AddUser(userName string, pwd string) (user *api.User, err error) {
@@ -18,7 +19,7 @@ func AddUser(userName string, pwd string) (user *api.User, err error) {
 	ctime := time.Now()
 	insert, err := Db.Prepare("insert into users (name,password,creatAt) values(?,?,?)")
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 	defer insert.Close()
 	_, err = insert.Exec(userName, pwd, ctime)
@@ -39,7 +40,7 @@ func GetUserByName(userName string) (*api.User, error) {
 		if err == sql.ErrNoRows {
 			return nil, err
 		}
-		log.Println("Query error:", err)
+		utils.Logger.Error("Query error:", zap.Error(err))
 		return nil, err
 	}
 

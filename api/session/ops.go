@@ -13,6 +13,7 @@ var sessionMap *sync.Map
 
 func init() {
 	sessionMap = &sync.Map{}
+	LoadSessions()
 }
 
 func AddNewSession(userId int, userName string) api.SimpleSession {

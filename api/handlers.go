@@ -7,16 +7,18 @@ import (
 	"video-server/api/dbops"
 	api "video-server/api/defs"
 	"video-server/api/session"
+	"video-server/api/utils"
 
 	"github.com/julienschmidt/httprouter"
+	"go.uber.org/zap"
 )
 
 func CreateUser(w http.ResponseWriter, req *http.Request, param httprouter.Params) {
 
-	res, _ := ioutil.ReadAll(req.Body)
+	reqBody, _ := ioutil.ReadAll(req.Body)
 	loginUser := &api.User{}
 
-	err := json.Unmarshal(res, loginUser)
+	err := json.Unmarshal(reqBody, loginUser)
 	if err != nil {
 		sendErrorResponse(w, api.ErrorRequestBodyParseFailed)
 		return
@@ -24,6 +26,7 @@ func CreateUser(w http.ResponseWriter, req *http.Request, param httprouter.Param
 
 	_, err = dbops.AddUser(loginUser.Username, loginUser.Password)
 	if err != nil {
+		utils.Logger.Error("AddUser failed", zap.Error(err))
 		sendErrorResponse(w, api.ErrorDBError)
 		return
 	}
@@ -40,9 +43,14 @@ func Login(w http.ResponseWriter, req *http.Request, param httprouter.Params) {
 		sendErrorResponse(w, api.ErrorRequestBodyParseFailed)
 		return
 	}
+	loginUser.Username = uname
 
 	pUser, err := dbops.GetUserByName(uname)
-	if err != nil || pUser.Password != loginUser.Password {
+	if err != nil {
+		sendErrorResponse(w, api.ErrorDBError)
+		return
+	}
+	if pUser.Password != loginUser.Password {
 		sendErrorResponse(w, api.ErrorNotAuthUser)
 		return
 	}
