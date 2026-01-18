@@ -15,4 +15,7 @@ var (
 	ErrorNotAuthUser            = ErrResponse{HttpSC: 401, Error: Err{Error: "User authentication failed.", ErrorCode: "002"}}
 	ErrorDBError                = ErrResponse{HttpSC: 500, Error: Err{Error: "DB ops failed", ErrorCode: "003"}}
 	ErrorInternalFaults         = ErrResponse{HttpSC: 500, Error: Err{Error: "Internal service error", ErrorCode: "004"}}
+	ErrorUserExisted            = ErrResponse{HttpSC: 400, Error: Err{Error: "User already exists", ErrorCode: "005"}}
+	ErrorUserNotExisted         = ErrResponse{HttpSC: 400, Error: Err{Error: "User does not exist", ErrorCode: "006"}}
+	ErrorLoginPasswordWrong     = ErrResponse{HttpSC: 400, Error: Err{Error: "Login password is wrong", ErrorCode: "007"}}
 )

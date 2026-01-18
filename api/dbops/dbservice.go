@@ -12,10 +12,6 @@ import (
 )
 
 func AddUser(userName string, pwd string) (user *api.User, err error) {
-	user, err = GetUserByName(userName)
-	if user != nil && err == nil {
-		return user, fmt.Errorf("user already exits")
-	}
 	ctime := time.Now()
 	insert, err := Db.Prepare("insert into users (name,password,creatAt) values(?,?,?)")
 	if err != nil {
@@ -30,10 +26,10 @@ func AddUser(userName string, pwd string) (user *api.User, err error) {
 	return user, err
 }
 
-func GetUserByName(userName string) (*api.User, error) {
+func GetUserByName(userName string) (user *api.User, err error) {
 	// 注意：这里返回单个 User，不是 slice
-	user := new(api.User)
-	err := Db.QueryRow("SELECT * FROM users WHERE name = ?", userName).
+	user = new(api.User)
+	err = Db.QueryRow("SELECT * FROM users WHERE name = ?", userName).
 		Scan(&user.Id, &user.Username, &user.Password, &user.IsVaild, &user.CreatAt)
 
 	if err != nil {
@@ -106,6 +102,28 @@ func GetVideoInfo(vid string) (*api.VideoInfo, error) {
 	return videoInfo, nil
 }
 
+func GetUserAllVideos(id int) ([]*api.VideoInfo, error) {
+	stmtOut, err := Db.Prepare("SELECT * FROM video_info WHERE author_id = ?")
+	if err != nil {
+		return nil, err
+	}
+	defer stmtOut.Close()
+	rows, err := stmtOut.Query(id)
+	if err != nil {
+		return nil, err
+	}
+	var res []*api.VideoInfo
+	for rows.Next() {
+		videoInfo := new(api.VideoInfo)
+		err := rows.Scan(&videoInfo.Vid, &videoInfo.AuthorId, &videoInfo.Name, &videoInfo.CreateTime, &videoInfo.ClickCount)
+		if err != nil {
+			return nil, err
+		}
+		res = append(res, videoInfo)
+	}
+	return res, nil
+}
+
 func DeleteVideoInfo(vid string) error {
 	stmtDel, err := Db.Prepare("delete from video_info where vid = ?")
 	if err != nil {
@@ -119,6 +137,7 @@ func DeleteVideoInfo(vid string) error {
 	return nil
 }
 
+// comment related db ops
 func InsertNewComments(vid string, aid int, content string) error {
 	stmtIns, err := Db.Prepare("insert into comments (comment_id,video_id,author_id,content,create_time) values(?,?,?,?,?)")
 	if err != nil {
@@ -184,7 +203,8 @@ func LoadSessionsFromDB() ([]api.SimpleSession, error) {
 	for rows.Next() {
 		var s api.SimpleSession
 		ttl := ""
-		err := rows.Scan(&s.SessionId, &s.UserId, &s.Username, &ttl)
+		var id int64
+		err := rows.Scan(&id, &s.SessionId, &s.UserId, &s.Username, &ttl)
 		if err != nil {
 			panic(err)
 		}
@@ -223,4 +243,55 @@ func DeleteSessionFromDB(sid string) error {
 	return nil
 }
 
-//
+// shcheduler related db ops
+func InsertNewVideoDeletionRecord(vid string) error {
+	insert, err := Db.Prepare("insert into video_delete_record (vid) values(?)")
+	if err != nil {
+		return err
+	}
+	defer insert.Close()
+	_, err = insert.Exec(vid)
+	if err != nil {
+		utils.Logger.Error("InsertNewVideoDeletionRecord failed", zap.Error(err))
+		return err
+	}
+	return nil
+}
+
+func ReadVideoDeletionRecord(count int) ([]string, error) {
+	stmtOut, err := Db.Prepare("select vid from video_delete_record limit ?")
+	if err != nil {
+		return nil, err
+	}
+	defer stmtOut.Close()
+	rows, err := stmtOut.Query(count)
+	if err != nil {
+		utils.Logger.Error("ReadVideoDeletionRecord failed", zap.Error(err))
+		return nil, err
+	}
+	var vids []string
+	for rows.Next() {
+		var vid string
+		var id int64
+		err := rows.Scan(&id, &vid)
+		if err != nil {
+			return nil, err
+		}
+		vids = append(vids, vid)
+	}
+	return vids, nil
+}
+
+func DeleteVideoDeletionRecord(vid string) error {
+	stmtDel, err := Db.Prepare("delete from video_delete_record where vid = ?")
+	if err != nil {
+		return err
+	}
+	defer stmtDel.Close()
+	_, err = stmtDel.Exec(vid)
+	if err != nil {
+		utils.Logger.Error("DeleteVideoDeletionRecord failed", zap.Error(err))
+		return err
+	}
+	return nil
+}

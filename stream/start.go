@@ -19,6 +19,14 @@ func NewMiddleWareHandler(r *httprouter.Router, connLimitNumber int) *middleWare
 }
 
 func (m *middleWareHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Headers", "*")
+	if req.Method == "OPTIONS" {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
 	if !m.l.GetConn() {
 		sendErrorResponse(w, http.StatusTooManyRequests, "too many requests")
 		return

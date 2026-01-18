@@ -27,11 +27,19 @@ func RegisterHandlers() *httprouter.Router {
 	router := httprouter.New()
 	router.POST("/user", CreateUser)
 	router.POST("/user/:user_name", Login)
+	router.GET("/user/:user_name", GetUserInfo)
+
+	router.POST("/user/:user_name/videos", AddNewVideo)
+	router.GET("/user/:user_name/videos", ListUserAllVideos)
+	router.DELETE("/user/:user_name/videos/:vid", DeleteVideoInfo)
+
+	router.POST("/videos/:vid/comments", PostComments)
+	router.GET("/videos/:vid/comments", ListComments)
 	return router
 }
 
 func Start() {
 	r := RegisterHandlers()
 	m := NewMiddleWareHandler(r)
-	http.ListenAndServe(":8080", m)
+	http.ListenAndServe(":8000", m)
 }

@@ -12,12 +12,12 @@ import (
 	"go.uber.org/zap"
 )
 
-var VIDEDO_DIR = "./videos/"
+var VIDEO_DIR = "./videos/"
 var MAX_UPLOAD_SIZE int64 = 1024 * 1024 * 100 // 100MB
 
 func streamHandler(w http.ResponseWriter, req *http.Request, param httprouter.Params) {
 	vid := param.ByName("vid-id")
-	video_storePath := VIDEDO_DIR + vid
+	video_storePath := VIDEO_DIR + vid
 
 	video, err := os.Open(video_storePath)
 	if err != nil {
@@ -48,7 +48,7 @@ func uploadHandler(w http.ResponseWriter, req *http.Request, param httprouter.Pa
 	defer file.Close()
 
 	vid := param.ByName("vid-id")
-	video_storePath := VIDEDO_DIR + vid
+	video_storePath := VIDEO_DIR + vid
 	out, err := os.Create(video_storePath)
 	if err != nil {
 		utils.Logger.Error("Create file error", zap.Error(err))

@@ -11,6 +11,11 @@ type User struct {
 	//UpdateAt int64  `json:updateAt`
 }
 
+type UserDTO struct {
+	Username string `json:"user_name"`
+	Password string `json:"password"`
+}
+
 type SignedUP struct {
 	Success   bool   `json:"success"`
 	SessionId string `json:"session_id"`
@@ -22,6 +27,10 @@ type VideoInfo struct {
 	Name       string    `json:"name"`
 	CreateTime time.Time `json:"create_time"`
 	ClickCount int       `json:"click_count"`
+}
+
+type VideoInfoDTO struct {
+	Videos []*VideoInfo `json:"videos"`
 }
 
 type Comment struct {
@@ -39,9 +48,24 @@ type CommentDTO struct {
 	CreateTime time.Time `json:"create_time"`
 }
 
+type CommentsDTO struct {
+	Comments []*CommentDTO `json:"comments"`
+}
+
 type SimpleSession struct {
 	SessionId string `json:"session_id"`
 	UserId    int    `json:"user_id"`
 	Username  string `json:"username"`
 	TTL       int64  `json:"ttl"`
+}
+
+type UserAddNewVideoDTO struct {
+	AuthorId int    `json:"author_id"`
+	Name     string `json:"name"`
+}
+
+type PostCommentsDTO struct {
+	//VideoId  string `json:"video_id"`
+	AuthorId int    `json:"author_id"`
+	Content  string `json:"content"`
 }
