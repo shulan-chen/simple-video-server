@@ -1,5 +1,7 @@
 package taskrunner
 
+import "fmt"
+
 type Runner struct {
 	Controller controlChannel
 	Error      controlChannel
@@ -36,17 +38,23 @@ func (r *Runner) startDispatch() {
 		case c := <-r.Controller:
 			switch c {
 			case READY_TO_DISPATCH:
+				//fmt.Println("entered dispatch case")
 				err := r.Dispatcher(r.Data)
+				//fmt.Println("leave dispatch function")
 				if err != nil {
 					r.Error <- CLOSE
-					return
+					fmt.Println("dispatch function errored")
+					//return
 				}
 				r.Controller <- READY_TO_EXECUTE
 			case READY_TO_EXECUTE:
+				//fmt.Println("entered execute case")
 				err := r.Executor(r.Data)
+				//fmt.Println("leave execute function")
 				if err != nil {
 					r.Error <- CLOSE
-					return
+					fmt.Println("execute function errored")
+					//return
 				}
 				r.Controller <- READY_TO_DISPATCH
 			}

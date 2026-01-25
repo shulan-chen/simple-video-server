@@ -220,7 +220,8 @@
 <body id="main-back">
 
 <div class="topnav">
-    <a class="active" href="#home">Home</a>
+    <a class="active" href="#home" id="lobby-link">Lobby (All Videos)</a>
+    <a href="#myvideos" id="myvideos-link">My Videos</a>
     <a href="#news">{{.Name}}</a>
     <a href="#about">About</a>
     <a href="#" id="upload" data-rel="popup">Upload</a>
@@ -259,7 +260,7 @@
             <h2>Model Header</h2>
         </div>
         <div class="modal-body">
-            <form id="uploadform" action="http://127.0.0.1:9000/upload/alan"
+            <form id="uploadform" action="http://10.201.144.200:9090/upload/alan"
             method="post" enctype="multipart/form-data" class="uploadform">
                 <input class="uploadform__input" type="file" name="file"
                 id="inputFile" accept="video/*">

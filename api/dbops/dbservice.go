@@ -72,17 +72,17 @@ func AddNewVideo(aid int, name string) (*api.VideoInfo, error) {
 	}
 
 	ctime := time.Now()
-	insert, err := Db.Prepare("insert into video_info (vid,author_id,name,create_time) values(?,?,?,?)")
+	insert, err := Db.Prepare("insert into video_info (vid,author_id,name,create_time,click_count) values(?,?,?,?,?)")
 	if err != nil {
 		return nil, err
 	}
 	defer insert.Close()
-	_, err = insert.Exec(vid, aid, name, ctime)
+	_, err = insert.Exec(vid, aid, name, ctime, 0)
 	if err != nil {
 		return nil, err
 	}
 
-	return &api.VideoInfo{Vid: vid, AuthorId: aid, Name: name, CreateTime: ctime}, nil
+	return &api.VideoInfo{Vid: vid, AuthorId: aid, Name: name, CreateTime: ctime, ClickCount: 0}, nil
 }
 
 func GetVideoInfo(vid string) (*api.VideoInfo, error) {
@@ -115,7 +115,31 @@ func GetUserAllVideos(id int) ([]*api.VideoInfo, error) {
 	var res []*api.VideoInfo
 	for rows.Next() {
 		videoInfo := new(api.VideoInfo)
-		err := rows.Scan(&videoInfo.Vid, &videoInfo.AuthorId, &videoInfo.Name, &videoInfo.CreateTime, &videoInfo.ClickCount)
+		var id int64
+		err := rows.Scan(&id, &videoInfo.Vid, &videoInfo.AuthorId, &videoInfo.Name, &videoInfo.CreateTime, &videoInfo.ClickCount)
+		if err != nil {
+			return nil, err
+		}
+		res = append(res, videoInfo)
+	}
+	return res, nil
+}
+
+func GetAllVideoInfo() ([]*api.VideoInfo, error) {
+	stmtOut, err := Db.Prepare("SELECT * FROM video_info ORDER BY create_time DESC")
+	if err != nil {
+		return nil, err
+	}
+	defer stmtOut.Close()
+	rows, err := stmtOut.Query()
+	if err != nil {
+		return nil, err
+	}
+	var res []*api.VideoInfo
+	for rows.Next() {
+		videoInfo := new(api.VideoInfo)
+		var id int64
+		err := rows.Scan(&id, &videoInfo.Vid, &videoInfo.AuthorId, &videoInfo.Name, &videoInfo.CreateTime, &videoInfo.ClickCount)
 		if err != nil {
 			return nil, err
 		}
@@ -272,8 +296,7 @@ func ReadVideoDeletionRecord(count int) ([]string, error) {
 	var vids []string
 	for rows.Next() {
 		var vid string
-		var id int64
-		err := rows.Scan(&id, &vid)
+		err := rows.Scan(&vid)
 		if err != nil {
 			return nil, err
 		}

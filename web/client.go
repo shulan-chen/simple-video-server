@@ -3,6 +3,7 @@ package web
 import (
 	"io"
 	"net/http"
+	"strings"
 )
 
 var httpClient *http.Client
@@ -16,7 +17,7 @@ func apiRequestProcess(apiBody *ApiBody, w http.ResponseWriter, req *http.Reques
 	//var err error
 
 	switch apiBody.Method {
-	case "GET":
+	case http.MethodGet:
 		netRequest, err := http.NewRequest("GET", apiBody.Url, nil)
 		netRequest.Header = req.Header
 		resp, err = httpClient.Do(netRequest)
@@ -33,8 +34,9 @@ func apiRequestProcess(apiBody *ApiBody, w http.ResponseWriter, req *http.Reques
 		w.WriteHeader(resp.StatusCode)
 		io.Copy(w, resp.Body)
 	case http.MethodPost:
-		netRequest, err := http.NewRequest("POST", apiBody.Url, req.Body)
+		netRequest, err := http.NewRequest("POST", apiBody.Url, strings.NewReader(apiBody.ReqBody))
 		netRequest.Header = req.Header
+		netRequest.Header.Del("Content-Length")
 		resp, err = httpClient.Do(netRequest)
 		if err != nil {
 			sendErrorResponse(w, ErrorInternalFaults)

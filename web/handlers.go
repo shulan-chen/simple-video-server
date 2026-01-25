@@ -54,7 +54,7 @@ func homeHandler(w http.ResponseWriter, req *http.Request, param httprouter.Para
 func userHomeHandler(w http.ResponseWriter, req *http.Request, param httprouter.Params) {
 	cname, err1 := req.Cookie("username")
 	sid, err2 := req.Cookie("sessionid")
-	if err1 != nil || err2 != nil {
+	if err1 != nil || err2 != nil { // missing cookie ，redirect t
 		http.Redirect(w, req, "/", http.StatusFound)
 		return
 	}

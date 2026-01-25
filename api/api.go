@@ -17,9 +17,10 @@ func NewMiddleWareHandler(r *httprouter.Router) *middleWareHandler {
 }
 
 func (m *middleWareHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	// do some logging
-	// do some auth
-	validateUserSession(req)
+
+	if !validateUserSession(w, req) {
+		return
+	}
 	m.r.ServeHTTP(w, req)
 }
 
@@ -28,6 +29,7 @@ func RegisterHandlers() *httprouter.Router {
 	router.POST("/user", CreateUser)
 	router.POST("/user/:user_name", Login)
 	router.GET("/user/:user_name", GetUserInfo)
+	router.POST("/user/:user_name/logout", Logout)
 
 	router.POST("/user/:user_name/videos", AddNewVideo)
 	router.GET("/user/:user_name/videos", ListUserAllVideos)
@@ -35,6 +37,7 @@ func RegisterHandlers() *httprouter.Router {
 
 	router.POST("/videos/:vid/comments", PostComments)
 	router.GET("/videos/:vid/comments", ListComments)
+	router.GET("/videos", ListAllVideos)
 	return router
 }
 

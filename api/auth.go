@@ -2,6 +2,7 @@ package api
 
 import (
 	"net/http"
+	"strings"
 	api "video-server/api/defs"
 	"video-server/api/session"
 )
@@ -9,13 +10,27 @@ import (
 var HEADER_FILED_SESSION = "X-Session-Id"
 var HEADER_FILED_UNAME = "X-User-Name"
 
-func validateUserSession(req *http.Request) bool {
+func validateUserSession(w http.ResponseWriter, req *http.Request) (needNextStep bool) {
+	// register and login do not need session validation
+	if req.URL.Path == "/user" && req.Method == "POST" {
+		return true
+	}
+	if req.Method == http.MethodPost && strings.HasPrefix(req.URL.Path, "/user/") {
+		rest := strings.TrimPrefix(req.URL.Path, "/user/")
+		// 如果剩余部分不包含 "/"，说明是 /user/:username 形式
+		if !strings.Contains(rest, "/") {
+			return true
+		}
+	}
+
 	sid := req.Header.Get(HEADER_FILED_SESSION)
 	if sid == "" {
+		sendErrorResponse(w, api.ErrorNotAuthUser)
 		return false
 	}
-	userName, ok := session.IsSessionExpired(sid)
-	if !ok {
+	userName, expired := session.IsSessionExpired(sid)
+	if expired {
+		sendErrorResponse(w, api.ErrorUserloginStatusExpired)
 		return false
 	}
 	req.Header.Add(HEADER_FILED_UNAME, userName)

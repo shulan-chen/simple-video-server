@@ -3,6 +3,7 @@ package api
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"time"
@@ -51,6 +52,7 @@ func Login(w http.ResponseWriter, req *http.Request, param httprouter.Params) {
 		return
 	}
 	loginUser.Username = uname
+	fmt.Println(*loginUser)
 
 	pUser, err := dbops.GetUserByName(uname)
 	if err != nil {
@@ -79,9 +81,14 @@ func Login(w http.ResponseWriter, req *http.Request, param httprouter.Params) {
 	}
 }
 
+func Logout(w http.ResponseWriter, req *http.Request, param httprouter.Params) {
+	sid := req.Header.Get(HEADER_FILED_SESSION)
+	session.DeleteSession(sid)
+	sendNormalResponse(w, "logout success", 200)
+}
+
 func GetUserInfo(w http.ResponseWriter, req *http.Request, param httprouter.Params) {
-	if !validateUserSession(req) {
-		sendErrorResponse(w, api.ErrorNotAuthUser)
+	if !ValidateUser(w, req) {
 		return
 	}
 
@@ -157,6 +164,26 @@ func ListUserAllVideos(w http.ResponseWriter, req *http.Request, param httproute
 
 }
 
+func ListAllVideos(w http.ResponseWriter, req *http.Request, param httprouter.Params) {
+	if !ValidateUser(w, req) {
+		return
+	}
+	videoInfos, err := dbops.GetAllVideoInfo()
+	if err != nil {
+		utils.Logger.Error("ListAllVideos failed", zap.Error(err))
+		sendErrorResponse(w, api.ErrorDBError)
+		return
+	}
+	videoInfoDTO := &api.VideoInfoDTO{}
+	videoInfoDTO.Videos = videoInfos
+	if resp, err := json.Marshal(videoInfoDTO); err != nil {
+		sendErrorResponse(w, api.ErrorInternalFaults)
+		return
+	} else {
+		sendNormalResponse(w, string(resp), 200)
+	}
+}
+
 func DeleteVideoInfo(w http.ResponseWriter, req *http.Request, param httprouter.Params) {
 	if !ValidateUser(w, req) {
 		return
@@ -166,6 +193,12 @@ func DeleteVideoInfo(w http.ResponseWriter, req *http.Request, param httprouter.
 	if err != nil {
 		utils.Logger.Error("DeleteVideoInfo failed", zap.Error(err))
 		sendErrorResponse(w, api.ErrorDBError)
+		return
+	}
+
+	err = dbops.InsertNewVideoDeletionRecord(vid)
+	if err != nil {
+		http.Error(w, "Failed to schedule video delete record task", http.StatusInternalServerError)
 		return
 	}
 	sendNormalResponse(w, "ok", 200)

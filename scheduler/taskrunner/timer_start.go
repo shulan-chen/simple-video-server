@@ -25,6 +25,6 @@ func (w *Worker) startWorker() {
 
 func Start() {
 	r := NewRunner(3, true, VideoClearDispatcher, VideoClearExecutor)
-	w := NewWorker(3*time.Second, r)
+	w := NewWorker(30*time.Second, r)
 	go w.startWorker()
 }

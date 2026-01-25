@@ -27,7 +27,7 @@ var (
 	ErrorRequestBodyParseFailed = ErrResponse{
 		HttpSC: 400,
 		Error: Err{
-			Error:     "Request body is not correct",
+			Error:     "Api Request body is not correct",
 			ErrorCode: "002",
 		},
 	}

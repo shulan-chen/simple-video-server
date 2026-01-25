@@ -18,4 +18,6 @@ var (
 	ErrorUserExisted            = ErrResponse{HttpSC: 400, Error: Err{Error: "User already exists", ErrorCode: "005"}}
 	ErrorUserNotExisted         = ErrResponse{HttpSC: 400, Error: Err{Error: "User does not exist", ErrorCode: "006"}}
 	ErrorLoginPasswordWrong     = ErrResponse{HttpSC: 400, Error: Err{Error: "Login password is wrong", ErrorCode: "007"}}
+
+	ErrorUserloginStatusExpired = ErrResponse{HttpSC: 401, Error: Err{Error: "User login status expired", ErrorCode: "008"}}
 )

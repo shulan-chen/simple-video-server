@@ -13,7 +13,7 @@ func RegisterHandlers() *httprouter.Router {
 	router.GET("/userhome", userHomeHandler)
 	router.POST("/userhome", userHomeHandler)
 	router.POST("/api", apiHandler)
-	router.POST("/upload/:vid-id", proxyHandler)
+	router.POST("/videos/upload/:vid-id", proxyHandler)
 
 	router.ServeFiles("/statics/*filepath", http.Dir("./templates"))
 	return router

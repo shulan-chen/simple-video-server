@@ -17,7 +17,7 @@ func VideoClearDispatcher(dc dataChannel) error {
 	// read from db
 	vids, err := dbops.ReadVideoDeletionRecord(readNumber)
 	if err != nil {
-		//utils.Logger.Error("VideoClearDispatcher ReadVideoDeletionRecord failed", zap.Error(err))
+		utils.Logger.Error("VideoClearDispatcher ReadVideoDeletionRecord failed", zap.Error(err))
 		return err
 	}
 	if len(vids) == 0 {
@@ -56,7 +56,7 @@ forloop:
 			break forloop
 		}
 	}
-	errMap.Range(func(k, v interface{}) bool {
+	errMap.Range(func(_, v interface{}) bool {
 		err = v.(error)
 		if err != nil {
 			return false
