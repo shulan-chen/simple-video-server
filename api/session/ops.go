@@ -41,7 +41,12 @@ func LoadSessions() {
 func IsSessionExpired(sid string) (userName string, ok bool) {
 	session, ok := sessionMap.Load(sid)
 	if !ok {
-		return "", true
+		existSession, err := dbops.LoadOneSessionFromDB(sid)
+		if err != nil || existSession.SessionId == "" {
+			return "", true
+		}
+		sessionMap.Store(existSession.SessionId, existSession)
+		return existSession.Username, false
 	}
 	s := session.(api.SimpleSession)
 	if s.TTL < time.Now().Unix() {

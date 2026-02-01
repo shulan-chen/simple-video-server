@@ -2,6 +2,7 @@ package dbops
 
 import (
 	"fmt"
+	"video-server/config"
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/jmoiron/sqlx"
@@ -10,7 +11,16 @@ import (
 var Db *sqlx.DB
 
 func init() {
-	database, err := sqlx.Open("mysql", "yanghao:123456@tcp(127.0.0.1:3306)/video_server?charset=utf8mb4&parseTime=True&loc=Local")
+
+	// 构建 DSN: user:password@tcp(addr)/dbname...
+	dsn := fmt.Sprintf("%s:%s@tcp(%s)/%s?charset=utf8mb4&parseTime=True&loc=Local",
+		config.AppConfig.DbUser,
+		config.AppConfig.DbPwd,
+		config.AppConfig.DbAddr,
+		config.AppConfig.DbName,
+	)
+
+	database, err := sqlx.Open("mysql", dsn)
 	if err != nil {
 		fmt.Println("open mysql failed,", err)
 		return

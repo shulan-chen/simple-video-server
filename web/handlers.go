@@ -98,7 +98,13 @@ func apiHandler(w http.ResponseWriter, req *http.Request, param httprouter.Param
 	defer req.Body.Close()
 }
 
-func proxyHandler(w http.ResponseWriter, req *http.Request, param httprouter.Params) {
+func proxyUploadHandler(w http.ResponseWriter, req *http.Request, param httprouter.Params) {
+	u, _ := url.Parse("http://localhost:9090/")
+	proxy := httputil.NewSingleHostReverseProxy(u)
+	proxy.ServeHTTP(w, req)
+}
+
+func proxyVideoViewHandler(w http.ResponseWriter, req *http.Request, param httprouter.Params) {
 	u, _ := url.Parse("http://localhost:9090/")
 	proxy := httputil.NewSingleHostReverseProxy(u)
 	proxy.ServeHTTP(w, req)

@@ -1,6 +1,7 @@
 package taskrunner
 
 import (
+	"context"
 	"errors"
 	"os"
 	"sync"
@@ -38,7 +39,8 @@ forloop:
 		select {
 		case vid := <-dc:
 			// delete video file
-			err = deleteVideoFile(vid.(string))
+			//err = deleteVideoFile(vid.(string))
+			err = stream.DeleteFromOSS(context.TODO(), vid.(string))
 			if err != nil {
 				utils.Logger.Error("VideoClearExecutor DeleteVideoFile failed", zap.String("vid", vid.(string)), zap.Error(err))
 				errMap.Store(vid, err)

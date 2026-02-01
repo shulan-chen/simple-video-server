@@ -339,7 +339,7 @@ function getCookie(cname) {
 
 // DOM operations
 function selectVideo(vid) {
-    var url = 'http://' + window.location.hostname + ':9090/videos/'+ vid
+    var url = 'http://' + window.location.hostname + ':8080/videos/'+ vid
     $("#curr-video").attr('src', url);
     $("#curr-video-name").text(currentVideo['name']);
     $("#curr-video-ctime").text('Uploaded at: ' + currentVideo['create_time']);

@@ -1,2 +1,7 @@
 .vscode/
 videos/
+go.mod
+go.sum
+server
+app.log
+config/config.json

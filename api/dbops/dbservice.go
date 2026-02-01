@@ -246,7 +246,8 @@ func LoadOneSessionFromDB(sid string) (*api.SimpleSession, error) {
 	defer stmtOut.Close()
 	var s api.SimpleSession
 	ttl := ""
-	err = stmtOut.QueryRow(sid).Scan(&s.SessionId, &s.UserId, &s.Username, &ttl)
+	var id int64
+	err = stmtOut.QueryRow(sid).Scan(&id, &s.SessionId, &s.UserId, &s.Username, &ttl)
 	if err != nil {
 		return nil, err
 	}
