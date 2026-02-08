@@ -2,6 +2,7 @@ package session
 
 import (
 	"context"
+	"encoding/json"
 	api "video-server/api/defs"
 
 	"github.com/go-redis/redis/v8"
@@ -10,23 +11,54 @@ import (
 var rconn *redis.Client
 var ctx context.Context
 
-func init() {
+func initRedis() {
 	ctx = context.Background()
 	rconn = redis.NewClient(&redis.Options{
-		Addr:     "127.0.0.1:6379",
+		Addr:     "139.196.242.169:6379",
 		Password: "",
 		DB:       0,
 	})
 }
 
+func UpdateSessions(sessionKey string, sessionIds []string) error {
+	data, err := json.Marshal(sessionIds)
+	err = rconn.Set(ctx, sessionKey, data, ttl).Err()
+	return err
+}
+func LoadSessionsFromRedis(sessionKey string) ([]api.SimpleSession, error) {
+	var sessionIds []string
+	data, err := rconn.Get(ctx, sessionKey).Result()
+	if err != nil {
+		if err == redis.Nil {
+			return []api.SimpleSession{}, nil
+		}
+		return nil, err
+	}
+	err = json.Unmarshal([]byte(data), &sessionIds)
+	var sessions []api.SimpleSession
+	for _, sid := range sessionIds {
+		session, err := GetSessionFromRedis(sid)
+		if err != nil {
+			continue
+		}
+		sessions = append(sessions, *session)
+	}
+	return sessions, nil
+}
+
 func AddSessionToRedis(sid string, session api.SimpleSession) error {
-	err := rconn.Set(ctx, sid, session, ttl).Err()
+	data, err := json.Marshal(session)
+	err = rconn.Set(ctx, sid, data, ttl).Err()
 	return err
 }
 
 func GetSessionFromRedis(sid string) (*api.SimpleSession, error) {
-	var session *api.SimpleSession
-	err := rconn.Get(ctx, sid).Scan(session)
+	session := &api.SimpleSession{}
+	data, err := rconn.Get(ctx, sid).Bytes()
+	if err != nil {
+		return nil, err
+	}
+	err = json.Unmarshal(data, session)
 	return session, err
 }
 

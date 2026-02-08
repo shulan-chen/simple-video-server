@@ -1,4 +1,4 @@
-$(document).ready(function() {
+$(document).ready(function () {
 
     DEFAULT_COOKIE_EXPIRE_TIME = 30;
 
@@ -11,15 +11,15 @@ $(document).ready(function() {
     session = getCookie('sessionid');
     uname = getCookie('username');
 
-    initPage(function() {
+    initPage(function () {
         if (listedVideos !== null) {
             currentVideo = listedVideos[0];
             selectVideo(listedVideos[0]['id']);
         }
 
-        $(".video-item").click(function() {
+        $(".video-item").click(function () {
             var self = this.id
-            listedVideos.forEach(function(item, index) {
+            listedVideos.forEach(function (item, index) {
                 if (item['id'] === self) {
                     currentVideo = item;
                     return
@@ -29,24 +29,24 @@ $(document).ready(function() {
             selectVideo(self);
         });
 
-        $("#items").on('click', '.del-video-button', function(e) {
-        e.stopPropagation(); // 防止冒泡触发播放视频
-        // 你的 id 可能是 'del-VID'，所以需要 substring
-        var vid = this.id.substring(4); 
-        deleteVideo(vid, function(res, err) {
-            if (err !== null) {
-                popupErrorMsg("encounter an error when try to delete video: " + vid);
-                return;
-            }
-            popupNotificationMsg("Successfully deleted video: " + vid)
-            // 刷新当前页面（或者重新触发一次加载列表函数）
-            location.reload();
+        $("#items").on('click', '.del-video-button', function (e) {
+            e.stopPropagation(); // 防止冒泡触发播放视频
+            // 你的 id 可能是 'del-VID'，所以需要 substring
+            var vid = this.id.substring(4);
+            deleteVideo(vid, function (res, err) {
+                if (err !== null) {
+                    popupErrorMsg("encounter an error when try to delete video: " + vid);
+                    return;
+                }
+                popupNotificationMsg("Successfully deleted video: " + vid)
+                // 刷新当前页面（或者重新触发一次加载列表函数）
+                location.reload();
+            });
         });
-    });
 
-        $("#submit-comment").on('click', function() {
+        $("#submit-comment").on('click', function () {
             var content = $("#comments-input").val();
-            postComment(currentVideo['id'], content, function(res, err) {
+            postComment(currentVideo['id'], content, function (res, err) {
                 if (err !== null) {
                     popupErrorMsg("encounter and error when try to post a comment: " + content);
                     return;
@@ -63,13 +63,13 @@ $(document).ready(function() {
     });
 
     // 1. 绑定 Lobby 点击事件
-    $("#lobby-link").on('click', function(e) {
+    $("#lobby-link").on('click', function (e) {
         e.preventDefault();
         // 样式切换
         $(".topnav a").removeClass("active");
         $(this).addClass("active");
 
-        listLobbyVideos(function(res, err) {
+        listLobbyVideos(function (res, err) {
             if (err != null) {
                 popupErrorMsg('Error loading lobby videos');
                 return;
@@ -80,13 +80,13 @@ $(document).ready(function() {
     });
 
     // 2. 绑定 My Videos 点击事件
-    $("#myvideos-link").on('click', function(e) {
+    $("#myvideos-link").on('click', function (e) {
         e.preventDefault();
         // 样式切换
         $(".topnav a").removeClass("active");
         $(this).addClass("active");
 
-        listAllUserVideos(function(res, err) {
+        listAllUserVideos(function (res, err) {
             if (err != null) {
                 popupErrorMsg('Error loading my videos');
                 return;
@@ -97,10 +97,10 @@ $(document).ready(function() {
     });
 
     // home page event registry
-    $("#regbtn").on('click', function(e) {
+    $("#regbtn").on('click', function (e) {
         $("#regbtn").text('Loading...')
         e.preventDefault()
-        registerUser(function(res, err) {
+        registerUser(function (res, err) {
             $('#regbtn').text("Register")
             if (err != null) {
                 popupErrorMsg('encounter an error, pls check your username or password');
@@ -115,11 +115,11 @@ $(document).ready(function() {
         });
     });
 
-    $("#signinbtn").on('click', function(e) {
+    $("#signinbtn").on('click', function (e) {
 
         $("#signinbtn").text('Loading...')
         e.preventDefault();
-        signinUser(function(res, err) {
+        signinUser(function (res, err) {
             if (err != null) {
                 $('#signinbtn').text("Sign In");
                 //window.alert('encounter an error, pls check your username or password')
@@ -134,32 +134,35 @@ $(document).ready(function() {
             //$("#signinsubmit").submit();
             //document.getElementById("signinsubmit").submit()
             window.location.href = "/userhome";
+
+            $("#lobby-link").trigger('click');
+            callback();
         });
     });
 
-    $("#signinhref").on('click', function() {
+    $("#signinhref").on('click', function () {
         $("#regsubmit").hide();
         $("#signinsubmit").show();
     });
 
-    $("#registerhref").on('click', function() {
+    $("#registerhref").on('click', function () {
         $("#regsubmit").show();
         $("#signinsubmit").hide();
     });
 
     // userhome event register
-    $("#upload").on('click', function() {
+    $("#upload").on('click', function () {
         $("#uploadvideomodal").show();
 
     });
 
 
-    $("#uploadform").on('submit', function(e) {
+    $("#uploadform").on('submit', function (e) {
         e.preventDefault()
         var vname = $('#vname').val();
 
-        createVideo(vname, function(res, err) {
-            if (err != null ) {
+        createVideo(vname, function (res, err) {
+            if (err != null) {
                 //window.alert('encounter an error when try to create video');
                 popupErrorMsg('encounter an error when try to create video');
                 return;
@@ -170,22 +173,22 @@ $(document).ready(function() {
             formData.append('file', $('#inputFile')[0].files[0]);
 
             $.ajax({
-                url : 'http://' + window.location.hostname + ':8080/videos/upload/' + obj['id'],
-                type : 'POST',
-                data : formData,
+                url: 'http://' + window.location.hostname + ':8080/videos/upload/' + obj['id'],
+                type: 'POST',
+                data: formData,
                 headers: {
                     'X-Session-Id': getCookie("sessionid")
                 },
                 crossDomain: true,
                 processData: false,  // tell jQuery not to process the data
                 contentType: false,  // tell jQuery not to set contentType
-                success : function(data) {
+                success: function (data) {
                     console.log(data);
                     $('#uploadvideomodal').hide();
                     location.reload();
                     //window.alert("hoa");
                 },
-                complete: function(xhr, textStatus) {
+                complete: function (xhr, textStatus) {
                     if (xhr.status === 204) {
                         window.alert("finish")
                         return;
@@ -201,12 +204,16 @@ $(document).ready(function() {
         });
     });
 
-    $(".close").on('click', function() {
+    $(".close").on('click', function () {
         $("#uploadvideomodal").hide();
     });
 
-    $("#logout").on('click', function() {
-        var data={
+    $("#logout").on('click', function (e) {
+        e.preventDefault();
+        if (!uname) {
+            uname = getCookie("username");
+        }
+        var data = {
             'url': 'http://' + window.location.hostname + ':8000/user/' + uname + '/logout',
             'method': 'POST',
             'req_body': ''
@@ -220,7 +227,7 @@ $(document).ready(function() {
                 'X-Session-Id': getCookie("sessionid") // 必须带上 SID 才能找到要删哪个
             },
             // 无论后端成功与否，前端都要清除 cookie 并跳转
-            complete: function() {
+            complete: function () {
                 setCookie("sessionid", "", -1);
                 setCookie("username", "", -1);
                 window.location.href = "/";
@@ -237,11 +244,11 @@ $(document).ready(function() {
 
     // 修复：使用事件委托绑定点击事件
     // 即使 .video-item 是后续 ajax 动态添加的，这个绑定依然有效
-    $("#items").on('click', '.video-item', function() {
+    $("#items").on('click', '.video-item', function () {
         var selfId = this.id;
-        
+
         // 更新 currentVideo 对象
-        listedVideos.forEach(function(item, index) {
+        listedVideos.forEach(function (item, index) {
             if (item['id'] === selfId) {
                 currentVideo = item;
                 return;
@@ -292,20 +299,21 @@ function initPage(callback) {
         callback();
     });
 
+
 }
 
 // 封装一个通用的渲染列表函数，复用逻辑
 function renderVideoList(videos) {
     listedVideos = videos;
     $("#items").empty(); // 清空当前列表
-    
+
     if (videos && videos.length > 0) {
         $("#play-box").show();
         // 默认选中第一个
         currentVideo = videos[0];
         selectVideo(videos[0]['id']);
-        
-        videos.forEach(function(item, index) {
+
+        videos.forEach(function (item, index) {
             var ele = htmlVideoListElement(item['id'], item['name'], item['create_time']);
             $("#items").append(ele);
         });
@@ -318,14 +326,14 @@ function renderVideoList(videos) {
 function setCookie(cname, cvalue, exmin) {
     var d = new Date();
     d.setTime(d.getTime() + (exmin * 60 * 1000));
-    var expires = "expires="+d.toUTCString();
+    var expires = "expires=" + d.toUTCString();
     document.cookie = cname + "=" + cvalue + ";" + expires + ";path=/";
 }
 
 function getCookie(cname) {
     var name = cname + "=";
     var ca = document.cookie.split(';');
-    for(var i = 0; i < ca.length; i++) {
+    for (var i = 0; i < ca.length; i++) {
         var c = ca[i];
         while (c.charAt(0) == ' ') {
             c = c.substring(1);
@@ -339,7 +347,7 @@ function getCookie(cname) {
 
 // DOM operations
 function selectVideo(vid) {
-    var url = 'http://' + window.location.hostname + ':8080/videos/'+ vid
+    var url = 'http://' + window.location.hostname + ':8080/videos/' + vid
     $("#curr-video").attr('src', url);
     $("#curr-video-name").text(currentVideo['name']);
     $("#curr-video-ctime").text('Uploaded at: ' + currentVideo['create_time']);
@@ -362,7 +370,7 @@ function refreshComments(vid) {
         } else {
             $("#comments-total").text(obj['comments'].length + ' Comments');
         }
-        obj['comments'].forEach(function(item, index) {
+        obj['comments'].forEach(function (item, index) {
             var ele = htmlCommentListElement(item['create_time'], item['authorName'], item['content']);
             $("#comments-history").append(ele);
         });
@@ -374,14 +382,14 @@ function popupNotificationMsg(msg) {
     var x = document.getElementById("snackbar");
     $("#snackbar").text(msg);
     x.className = "show";
-    setTimeout(function(){ x.className = x.className.replace("show", ""); }, 2000);
+    setTimeout(function () { x.className = x.className.replace("show", ""); }, 2000);
 }
 
 function popupErrorMsg(msg) {
     var x = document.getElementById("errorbar");
     $("#errorbar").text(msg);
     x.className = "show";
-    setTimeout(function(){ x.className = x.className.replace("show", ""); }, 2000);
+    setTimeout(function () { x.className = x.className.replace("show", ""); }, 2000);
 }
 
 function htmlCommentListElement(ctime, author, content) {
@@ -411,13 +419,19 @@ function htmlVideoListElement(vid, name, ctime) {
     var ele = $('<a/>', {
         href: '#'
     });
+
+    // 构建视频流地址
+    var url = 'http://' + window.location.hostname + ':9090/videos/' + vid;
+
     ele.append(
         $('<video/>', {
-            width:'320',
-            height:'240',
-            poster:'/statics/img/preloader.jpg',
-            controls: true
-            //href: '#'
+            src: url,
+            width: '320',
+            //height: '240',
+            preload: 'metadata',
+            muted: true,
+            controls: true,
+            style:'width: 100%; height: auto;'
         })
     );
     ele.append(
@@ -427,7 +441,7 @@ function htmlVideoListElement(vid, name, ctime) {
     );
     ele.append(
         $('<div/>', {
-            text: ctime
+            text: name
         })
     );
 
@@ -457,7 +471,7 @@ function htmlVideoListElement(vid, name, ctime) {
 
 // Async ajax methods
 
-var apiUrl = 'http://'+window.location.hostname + ':8080/api';
+var apiUrl = 'http://' + window.location.hostname + ':8080/api';
 // User operations
 function registerUser(callback) {
     var username = $("#username").val();
@@ -474,24 +488,24 @@ function registerUser(callback) {
     }
 
     var dat = {
-        'url': 'http://'+ window.location.hostname + ':8000/user',
+        'url': 'http://' + window.location.hostname + ':8000/user',
         'method': 'POST',
         'req_body': JSON.stringify(reqBody)
     };
 
     $.ajax({
-        url  : apiUrl,
-        type : 'post',
-        data : JSON.stringify(dat),
+        url: apiUrl,
+        type: 'post',
+        data: JSON.stringify(dat),
         contentType: 'application/json; charset=utf-8',
-    }).done(function(data, statusText, xhr){
+    }).done(function (data, statusText, xhr) {
         if (xhr.status >= 400) {
             callback(null, "Error of register");
             return;
         }
         uname = username;
         callback(data, null);
-    }).fail(function(xhr,satus,error){
+    }).fail(function (xhr, satus, error) {
         console.error("Register error:", error);
         callback(null, "Error of register");
     });
@@ -512,27 +526,27 @@ function signinUser(callback) {
     }
 
     var dat = {
-        'url': 'http://'+ window.location.hostname + ':8000/user/' + username,
+        'url': 'http://' + window.location.hostname + ':8000/user/' + username,
         'method': 'POST',
         'req_body': JSON.stringify(reqBody)
     };
 
     $.ajax({
-        url  : apiUrl,
-        type : 'post',
-        data : JSON.stringify(dat),
+        url: apiUrl,
+        type: 'post',
+        data: JSON.stringify(dat),
         statusCode: {
-            500: function() {
+            500: function () {
                 callback(null, "Internal error");
             }
         },
-        complete: function(xhr, textStatus) {
+        complete: function (xhr, textStatus) {
             if (xhr.status >= 400) {
                 callback(null, "Error of Signin");
                 return;
             }
         }
-    }).done(function(data, statusText, xhr){
+    }).done(function (data, statusText, xhr) {
         if (xhr.status >= 400) {
             callback(null, "Error of Signin");
             return;
@@ -554,14 +568,14 @@ function getUserId(callback) {
         type: 'post',
         data: JSON.stringify(dat),
         headers: {
-                    'X-Session-Id': getCookie("sessionid")
-                },
+            'X-Session-Id': getCookie("sessionid")
+        },
         statusCode: {
-            500: function() {
+            500: function () {
                 callback(null, "Internal Error");
             }
         },
-        complete: function(xhr, textStatus) {
+        complete: function (xhr, textStatus) {
             if (xhr.status >= 400) {
                 callback(null, "Error of getUserId");
                 return;
@@ -586,24 +600,24 @@ function createVideo(vname, callback) {
     };
 
     $.ajax({
-        url  : apiUrl,
-        type : 'post',
-        data : JSON.stringify(dat),
+        url: apiUrl,
+        type: 'post',
+        data: JSON.stringify(dat),
         headers: {
-                    'X-Session-Id': getCookie("sessionid")
-                },
+            'X-Session-Id': getCookie("sessionid")
+        },
         statusCode: {
-            500: function() {
+            500: function () {
                 callback(null, "Internal error");
             }
         },
-        complete: function(xhr, textStatus) {
+        complete: function (xhr, textStatus) {
             if (xhr.status >= 400) {
                 callback(null, "Error of Signin");
                 return;
             }
         }
-    }).done(function(data, statusText, xhr){
+    }).done(function (data, statusText, xhr) {
         if (xhr.status >= 400) {
             callback(null, "Error of Signin");
             return;
@@ -620,24 +634,24 @@ function listLobbyVideos(callback) {
     };
 
     $.ajax({
-        url  : apiUrl,
-        type : 'post',
-        data : JSON.stringify(dat),
+        url: apiUrl,
+        type: 'post',
+        data: JSON.stringify(dat),
         headers: {
-                    'X-Session-Id': getCookie("sessionid")
-                },
+            'X-Session-Id': getCookie("sessionid")
+        },
         statusCode: {
-            500: function() {
+            500: function () {
                 callback(null, "Internal error");
             }
         },
-        complete: function(xhr, textStatus) {
+        complete: function (xhr, textStatus) {
             if (xhr.status >= 400) {
                 callback(null, "Error of listLobbyVideos");
                 return;
             }
         }
-    }).done(function(data, statusText, xhr){
+    }).done(function (data, statusText, xhr) {
         if (xhr.status >= 400) {
             callback(null, "Error of listLobbyVideos");
             return;
@@ -654,24 +668,24 @@ function listAllUserVideos(callback) {
     };
 
     $.ajax({
-        url  : apiUrl,
-        type : 'post',
-        data : JSON.stringify(dat),
+        url: apiUrl,
+        type: 'post',
+        data: JSON.stringify(dat),
         headers: {
-                    'X-Session-Id': getCookie("sessionid")
-                },
+            'X-Session-Id': getCookie("sessionid")
+        },
         statusCode: {
-            500: function() {
+            500: function () {
                 callback(null, "Internal error");
             }
         },
-        complete: function(xhr, textStatus) {
+        complete: function (xhr, textStatus) {
             if (xhr.status >= 400) {
                 callback(null, "Error of Signin");
                 return;
             }
         }
-    }).done(function(data, statusText, xhr){
+    }).done(function (data, statusText, xhr) {
         if (xhr.status >= 400) {
             callback(null, "Error of Signin");
             return;
@@ -688,24 +702,24 @@ function deleteVideo(vid, callback) {
     };
 
     $.ajax({
-        url  : apiUrl,
-        type : 'post',
-        data : JSON.stringify(dat),
+        url: apiUrl,
+        type: 'post',
+        data: JSON.stringify(dat),
         headers: {
-                    'X-Session-Id': getCookie("sessionid")
-                },
+            'X-Session-Id': getCookie("sessionid")
+        },
         statusCode: {
-            500: function() {
+            500: function () {
                 callback(null, "Internal error");
             }
         },
-        complete: function(xhr, textStatus) {
+        complete: function (xhr, textStatus) {
             if (xhr.status >= 400) {
                 callback(null, "Error of Signin");
                 return;
             }
         }
-    }).done(function(data, statusText, xhr){
+    }).done(function (data, statusText, xhr) {
         if (xhr.status >= 400) {
             callback(null, "Error of Signin");
             return;
@@ -727,24 +741,24 @@ function postComment(vid, content, callback) {
     };
 
     $.ajax({
-        url  : apiUrl,
-        type : 'post',
-        data : JSON.stringify(dat),
+        url: apiUrl,
+        type: 'post',
+        data: JSON.stringify(dat),
         headers: {
-                    'X-Session-Id': getCookie("sessionid")
-                },
+            'X-Session-Id': getCookie("sessionid")
+        },
         statusCode: {
-            500: function() {
+            500: function () {
                 callback(null, "Internal error");
             }
         },
-        complete: function(xhr, textStatus) {
+        complete: function (xhr, textStatus) {
             if (xhr.status >= 400) {
                 callback(null, "Error of Signin");
                 return;
             }
         }
-    }).done(function(data, statusText, xhr){
+    }).done(function (data, statusText, xhr) {
         if (xhr.status >= 400) {
             callback(null, "Error of Signin");
             return;
@@ -761,24 +775,24 @@ function listAllComments(vid, callback) {
     };
 
     $.ajax({
-        url  : apiUrl,
-        type : 'post',
-        data : JSON.stringify(dat),
+        url: apiUrl,
+        type: 'post',
+        data: JSON.stringify(dat),
         headers: {
-                    'X-Session-Id': getCookie("sessionid")
-                },
+            'X-Session-Id': getCookie("sessionid")
+        },
         statusCode: {
-            500: function() {
+            500: function () {
                 callback(null, "Internal error");
             }
         },
-        complete: function(xhr, textStatus) {
+        complete: function (xhr, textStatus) {
             if (xhr.status >= 400) {
                 callback(null, "Error of Signin");
                 return;
             }
         }
-    }).done(function(data, statusText, xhr){
+    }).done(function (data, statusText, xhr) {
         if (xhr.status >= 400) {
             callback(null, "Error of Signin");
             return;

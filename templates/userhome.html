@@ -126,11 +126,19 @@
             color: white;
         }
         .video-thumbnail-list {
-            padding-left: 50px;
+            padding-left: 0 !important; 
         }
 
         .whole {
-            padding-left: 100px;
+            display: flex;
+            width: 100%;
+            margin-top: 20px;
+            padding: 0 20px; /* 给左右留点空隙 */
+        }
+        /* 2. 左侧播放器区域 */
+        #play-box {
+            width: 70%; /* 占据左边 70% 宽度 */
+            padding-right: 20px;
         }
 
         #comments {
@@ -154,6 +162,13 @@
             font-size: 18px;
             color: black;
             line-height: 3;
+        }
+        /* 调整播放器大小，使其自适应 */
+        #curr-video {
+            width: 100%;
+            height: auto;
+            max-height: 600px;
+            background-color: black;
         }
         #curr-video-name {
             font-size: 18px;
@@ -208,6 +223,28 @@
             -webkit-animation: fadein 0.5s, fadeout 0.5s 2.5s;
             animation: fadein 0.5s, fadeout 0.5s 2.5s;
         }
+        /* 3. 右侧视频列表区域 */
+        #items {
+            width: 30%; /* 占据右边 30% 宽度 */
+            height: 800px; /* 给定高度 */
+            overflow-y: auto; /* 内容过多时显示滚动条 */
+            border-left: 1px solid #ddd; /* 加个分隔线 */
+            padding-left: 20px;
+        }
+        /* 列表项样式微调 */
+        .video-item {
+            margin-bottom: 20px;
+            padding: 10px;
+            border: 1px solid #eee;
+            border-radius: 4px;
+            background: white;
+            transition: box-shadow 0.3s;
+        }
+        .video-item:hover {
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            cursor: pointer;
+        }
+
     </style>
     <script
             src="https://code.jquery.com/jquery-3.3.1.min.js"
@@ -229,7 +266,7 @@
 </div>
 
 <div class="topic-back" style="padding-left: 16px">
-    <h2 id="title">Welcome to MOVIEDASH</h2>
+    <h2 id="title">Welcome to Simple Video</h2>
 </div>
 
 <div class="whole">
