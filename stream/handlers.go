@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"time"
 	"video-server/api/utils"
 
 	"github.com/julienschmidt/httprouter"
@@ -14,9 +15,9 @@ import (
 var VIDEO_DIR = "./videos/"
 var MAX_UPLOAD_SIZE int64 = 1024 * 1024 * 100 // 100MB
 
-func streamHandler(w http.ResponseWriter, req *http.Request, param httprouter.Params) {
+func streamLocalHandler(w http.ResponseWriter, req *http.Request, param httprouter.Params) {
 	vid := param.ByName("vid-id")
-	/* video_storePath := VIDEO_DIR + vid
+	video_storePath := VIDEO_DIR + vid
 
 	video, err := os.Open(video_storePath)
 	if err != nil {
@@ -26,11 +27,11 @@ func streamHandler(w http.ResponseWriter, req *http.Request, param httprouter.Pa
 	}
 	defer video.Close()
 	w.Header().Set("Content-Type", "video/mp4")
-	http.ServeContent(w, req, "", time.Now(), video) */
+	http.ServeContent(w, req, "", time.Now(), video)
+}
 
-	// ossURL := "https://" + BUCKET_NAME + "." + ENDPOINT + "/" + OSS_VIDEO_DIR + vid
-	// http.Redirect(w, req, ossURL, 301)
-
+func streamOssHandler(w http.ResponseWriter, req *http.Request, param httprouter.Params) {
+	vid := param.ByName("vid-id")
 	// 调用 GetOssVideoURL 获取带签名的 URL
 	targetUrl, err := GetOssVideoURL(req.Context(), vid)
 	if err != nil {
@@ -97,7 +98,6 @@ func uploadOssHandler(w http.ResponseWriter, req *http.Request, param httprouter
 	contentType := header.Header.Get("Content-Type")
 
 	vid := param.ByName("vid-id")
-	//video_storePath := VIDEO_DIR + vid
 	err = UploadToOSS(req.Context(), vid, file, contentType)
 	if err != nil {
 		utils.Logger.Error("Upload to OSS error", zap.Error(err))

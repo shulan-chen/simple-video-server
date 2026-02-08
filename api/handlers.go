@@ -3,7 +3,6 @@ package api
 import (
 	"database/sql"
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"net/http"
 	"time"
@@ -52,7 +51,7 @@ func Login(w http.ResponseWriter, req *http.Request, param httprouter.Params) {
 		return
 	}
 	loginUser.Username = uname
-	fmt.Println(*loginUser)
+	//fmt.Println(*loginUser)
 
 	pUser, err := dbops.GetUserByName(uname)
 	if err != nil {
@@ -68,7 +67,7 @@ func Login(w http.ResponseWriter, req *http.Request, param httprouter.Params) {
 		return
 	}
 
-	simplesession := session.AddNewSession(pUser.Id, pUser.Username)
+	simplesession, err := session.AddNewSession(pUser.Id, pUser.Username)
 	su := api.SignedUP{
 		SessionId: simplesession.SessionId,
 		Success:   true,
@@ -188,8 +187,26 @@ func DeleteVideoInfo(w http.ResponseWriter, req *http.Request, param httprouter.
 	if !ValidateUser(w, req) {
 		return
 	}
+	userName := param.ByName("user_name")
+	user, err := dbops.GetUserByName(userName)
+	if err != nil {
+		utils.Logger.Error("GetUserByName failed", zap.Error(err))
+		sendErrorResponse(w, api.ErrorDBError)
+		return
+	}
 	vid := param.ByName("vid")
-	err := dbops.DeleteVideoInfo(vid)
+	existedVideo, err := dbops.GetVideoInfo(vid)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			sendErrorResponse(w, api.ErrorVideoNotExisted)
+			return
+		}
+	}
+	if existedVideo.AuthorId != user.Id {
+		sendErrorResponse(w, api.ErrorVideoNotMatchToUser)
+		return
+	}
+	err = dbops.DeleteVideoInfo(vid)
 	if err != nil {
 		utils.Logger.Error("DeleteVideoInfo failed", zap.Error(err))
 		sendErrorResponse(w, api.ErrorDBError)

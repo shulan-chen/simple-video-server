@@ -23,7 +23,7 @@ func init() {
 	database, err := sqlx.Open("mysql", dsn)
 	if err != nil {
 		fmt.Println("open mysql failed,", err)
-		return
+		panic(err)
 	}
 	Db = database
 }

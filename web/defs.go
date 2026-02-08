@@ -38,4 +38,18 @@ var (
 			ErrorCode: "003",
 		},
 	}
+	ErrorRendorTemplateFaults = ErrResponse{
+		HttpSC: 500,
+		Error: Err{
+			Error:     "RendorTemplate error",
+			ErrorCode: "004",
+		},
+	}
+	ErrorInternalProxyFaults = ErrResponse{
+		HttpSC: 500,
+		Error: Err{
+			Error:     "Internal Proxy error",
+			ErrorCode: "005",
+		},
+	}
 )

@@ -42,9 +42,7 @@ func (r *Runner) startDispatch() {
 				err := r.Dispatcher(r.Data)
 				//fmt.Println("leave dispatch function")
 				if err != nil {
-					r.Error <- CLOSE
-					fmt.Println("dispatch function errored")
-					//return
+					return
 				}
 				r.Controller <- READY_TO_EXECUTE
 			case READY_TO_EXECUTE:
@@ -52,9 +50,8 @@ func (r *Runner) startDispatch() {
 				err := r.Executor(r.Data)
 				//fmt.Println("leave execute function")
 				if err != nil {
-					r.Error <- CLOSE
 					fmt.Println("execute function errored")
-					//return
+					return
 				}
 				r.Controller <- READY_TO_DISPATCH
 			}

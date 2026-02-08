@@ -22,7 +22,8 @@ func VideoClearDispatcher(dc dataChannel) error {
 		return err
 	}
 	if len(vids) == 0 {
-		return errors.New("All tasks finished")
+		//utils.Logger.Info("no video need to delete!")
+		return errors.New("No video need to delete!")
 	}
 	for _, vid := range vids {
 		dc <- vid

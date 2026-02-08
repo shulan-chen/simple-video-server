@@ -22,7 +22,7 @@ func validateUserSession(w http.ResponseWriter, req *http.Request) (needNextStep
 			return true
 		}
 	}
-
+	//检查有没有X-Session-Id头，没有/session过期都视为身份不合法
 	sid := req.Header.Get(HEADER_FILED_SESSION)
 	if sid == "" {
 		sendErrorResponse(w, api.ErrorNotAuthUser)
@@ -33,6 +33,7 @@ func validateUserSession(w http.ResponseWriter, req *http.Request) (needNextStep
 		sendErrorResponse(w, api.ErrorUserloginStatusExpired)
 		return false
 	}
+	//session存在且没过期，就为请求加上X-User-Name头，后续的就只用校验是否存在该Header就行
 	req.Header.Add(HEADER_FILED_UNAME, userName)
 	return true
 }

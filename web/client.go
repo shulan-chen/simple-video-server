@@ -22,7 +22,7 @@ func apiRequestProcess(apiBody *ApiBody, w http.ResponseWriter, req *http.Reques
 		netRequest.Header = req.Header
 		resp, err = httpClient.Do(netRequest)
 		if err != nil {
-			sendErrorResponse(w, ErrorInternalFaults)
+			sendErrorResponse(w, ErrorInternalProxyFaults)
 			return
 		}
 		defer resp.Body.Close()
@@ -39,7 +39,7 @@ func apiRequestProcess(apiBody *ApiBody, w http.ResponseWriter, req *http.Reques
 		netRequest.Header.Del("Content-Length")
 		resp, err = httpClient.Do(netRequest)
 		if err != nil {
-			sendErrorResponse(w, ErrorInternalFaults)
+			sendErrorResponse(w, ErrorInternalProxyFaults)
 			return
 		}
 		defer resp.Body.Close()
@@ -55,7 +55,7 @@ func apiRequestProcess(apiBody *ApiBody, w http.ResponseWriter, req *http.Reques
 		netRequest.Header = req.Header
 		resp, err = httpClient.Do(netRequest)
 		if err != nil {
-			sendErrorResponse(w, ErrorInternalFaults)
+			sendErrorResponse(w, ErrorInternalProxyFaults)
 			return
 		}
 		defer resp.Body.Close()

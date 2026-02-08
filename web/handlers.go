@@ -45,7 +45,7 @@ func homeHandler(w http.ResponseWriter, req *http.Request, param httprouter.Para
 	t, err := template.ParseFiles("./templates/home.html")
 	if err != nil {
 		utils.Logger.Error("Parsing template home.html faild")
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		sendErrorResponse(w, ErrorRendorTemplateFaults)
 		return
 	}
 	t.Execute(w, HomePage{Name: "unknown"})
@@ -54,7 +54,7 @@ func homeHandler(w http.ResponseWriter, req *http.Request, param httprouter.Para
 func userHomeHandler(w http.ResponseWriter, req *http.Request, param httprouter.Params) {
 	cname, err1 := req.Cookie("username")
 	sid, err2 := req.Cookie("sessionid")
-	if err1 != nil || err2 != nil { // missing cookie ，redirect t
+	if err1 != nil || err2 != nil { // missing cookie ，redirect to root path
 		http.Redirect(w, req, "/", http.StatusFound)
 		return
 	}
@@ -74,7 +74,7 @@ func userHomeHandler(w http.ResponseWriter, req *http.Request, param httprouter.
 	t, err := template.ParseFiles("./templates/userhome.html")
 	if err != nil {
 		utils.Logger.Error("Parsing template userhome.html faild")
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		sendErrorResponse(w, ErrorRendorTemplateFaults)
 		return
 	}
 	t.Execute(w, p)

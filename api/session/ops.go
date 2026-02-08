@@ -16,16 +16,16 @@ func init() {
 	LoadSessions()
 }
 
-func AddNewSession(userId int, userName string) api.SimpleSession {
+func AddNewSession(userId int, userName string) (api.SimpleSession, error) {
 	sid, _ := utils.NewUUID()
 	expire := time.Now().Add(ttl).Unix()
-	err := dbops.InsertNewSession(sid, userId, userName, expire)
-	if err != nil {
-		panic(err)
-	}
 	session := api.SimpleSession{SessionId: sid, UserId: userId, Username: userName, TTL: expire}
+	err := AddSessionToRedis(sid, session)
+	if err != nil {
+		return session, err
+	}
 	sessionMap.Store(sid, session)
-	return session
+	return session, nil
 }
 
 func LoadSessions() {
@@ -41,6 +41,7 @@ func LoadSessions() {
 func IsSessionExpired(sid string) (userName string, ok bool) {
 	session, ok := sessionMap.Load(sid)
 	if !ok {
+		//本地cache没有还要去db搂，防止分布式不一致的情况
 		existSession, err := dbops.LoadOneSessionFromDB(sid)
 		if err != nil || existSession.SessionId == "" {
 			return "", true

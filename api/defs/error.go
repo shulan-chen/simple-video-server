@@ -20,4 +20,7 @@ var (
 	ErrorLoginPasswordWrong     = ErrResponse{HttpSC: 400, Error: Err{Error: "Login password is wrong", ErrorCode: "007"}}
 
 	ErrorUserloginStatusExpired = ErrResponse{HttpSC: 401, Error: Err{Error: "User login status expired", ErrorCode: "008"}}
+	ErrorVideoNotExisted        = ErrResponse{HttpSC: 400, Error: Err{Error: "Video does not exist", ErrorCode: "009"}}
+
+	ErrorVideoNotMatchToUser = ErrResponse{HttpSC: 500, Error: Err{Error: "Video Not belong to request user", ErrorCode: "010"}}
 )

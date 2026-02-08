@@ -93,7 +93,8 @@ func GetVideoInfo(vid string) (*api.VideoInfo, error) {
 	if err != nil {
 		return nil, err
 	}
-	err = stmtQuery.QueryRow(vid).Scan(&videoInfo.Vid, &videoInfo.AuthorId, &videoInfo.Name, &videoInfo.CreateTime, &videoInfo.ClickCount)
+	var Id int64
+	err = stmtQuery.QueryRow(vid).Scan(&Id, &videoInfo.Vid, &videoInfo.AuthorId, &videoInfo.Name, &videoInfo.CreateTime, &videoInfo.ClickCount)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, err
