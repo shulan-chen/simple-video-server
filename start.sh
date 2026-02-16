@@ -2,7 +2,7 @@
 
 # 1. 编译项目 (生成名为 server 的可执行文件)
 echo "正在构建项目..."
-go build -o server .
+go build -o video-server .
 
 # 检查编译是否成功
 if [ $? -ne 0 ]; then
@@ -11,7 +11,7 @@ if [ $? -ne 0 ]; then
 fi
 
 # 2. 检查是否已经在运行
-PID=$(pgrep -f "./server")
+PID=$(pgrep -f "./video-server")
 if [ -n "$PID" ]; then
     echo "⚠️  服务已经在运行中 (PID: $PID)。请先停止服务。"
     exit 0
@@ -22,7 +22,7 @@ fi
 # > app.log: 标准输出重定向到 app.log
 # 2>&1: 错误输出重定向到标准输出（也进入 app.log）
 # &: 在后台运行
-nohup ./server > app.log 2>&1 &
+nohup ./video-server > app.log 2>&1 &
 
 echo "✅ 服务已启动！"
 echo "📄 日志文件: app.log"

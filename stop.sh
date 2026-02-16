@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # 查找名为 ./server 的进程 ID
-PID=$(pgrep -f "./server")
+PID=$(pgrep -f "./video-server")
 
 if [ -z "$PID" ]; then
     echo "⚠️  未发现正在运行的服务。"
