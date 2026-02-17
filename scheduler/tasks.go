@@ -1,4 +1,4 @@
-package taskrunner
+package scheduler
 
 import (
 	"context"

@@ -1,6 +1,9 @@
-package taskrunner
+package scheduler
 
-import "time"
+import (
+	"time"
+	"video-server/config"
+)
 
 type Worker struct {
 	Runner *Runner
@@ -25,6 +28,6 @@ func (w *Worker) startWorker() {
 
 func Start() {
 	r := NewRunner(3, true, VideoClearDispatcher, VideoClearExecutor)
-	w := NewWorker(30*time.Second, r)
+	w := NewWorker(time.Duration(config.AppConfig.VideoDeleteDelayTime)*time.Second, r)
 	w.startWorker()
 }

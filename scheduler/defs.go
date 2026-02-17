@@ -1,4 +1,4 @@
-package taskrunner
+package scheduler
 
 const (
 	READY_TO_DISPATCH = "d"

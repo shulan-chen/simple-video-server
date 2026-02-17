@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	api "video-server/api/defs"
 
+	"video-server/config"
+
 	"github.com/go-redis/redis/v8"
 )
 
@@ -14,9 +16,9 @@ var ctx context.Context
 func initRedis() {
 	ctx = context.Background()
 	rconn = redis.NewClient(&redis.Options{
-		Addr:     "139.196.242.169:6379",
-		Password: "",
-		DB:       0,
+		Addr:     config.AppConfig.RedisAddr,
+		Password: config.AppConfig.RedisPwd,
+		DB:       config.AppConfig.RedisDB,
 	})
 }
 

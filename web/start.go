@@ -1,25 +1,30 @@
 package web
 
 import (
-	"net/http"
-
-	"github.com/julienschmidt/httprouter"
+	"github.com/gin-gonic/gin"
 )
 
-func RegisterHandlers() *httprouter.Router {
-	router := httprouter.New()
+func RegisterHandlers() *gin.Engine {
+	router := gin.Default()
+
+	router.LoadHTMLGlob("templates/*.html")
+	router.Static("/statics/", "./templates")
+
 	router.GET("/", homeHandler)
 	router.POST("/", homeHandler)
 	router.GET("/userhome", userHomeHandler)
 	router.POST("/userhome", userHomeHandler)
+	//API 透传路由
 	router.POST("/api", apiHandler)
 	router.GET("/videos/:vid-id", proxyVideoViewHandler)
 	router.POST("/videos/upload/:vid-id", proxyUploadHandler)
 
-	router.ServeFiles("/statics/*filepath", http.Dir("./templates"))
 	return router
 }
 
 func Start() {
-	http.ListenAndServe(":8080", RegisterHandlers())
+	r := RegisterHandlers()
+	if err := r.Run(":8080"); err != nil {
+		panic(err)
+	}
 }

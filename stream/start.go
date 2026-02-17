@@ -3,61 +3,55 @@ package stream
 import (
 	"net/http"
 
-	"github.com/julienschmidt/httprouter"
+	"github.com/gin-gonic/gin"
 )
 
-type middleWareHandler struct {
-	r *httprouter.Router
-	l *ConnLimiter
-}
+// StreamMiddleware 统一处理 CORS 和连接限流
+func StreamMiddleware(connLimitNumber int) gin.HandlerFunc {
+	limiter := NewConnLimiter(connLimitNumber)
 
-func NewMiddleWareHandler(r *httprouter.Router, connLimitNumber int) *middleWareHandler {
-	return &middleWareHandler{
-		r: r,
-		l: NewConnLimiter(connLimitNumber),
+	return func(c *gin.Context) {
+		// 1. 设置 CORS 头
+		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+		c.Writer.Header().Set("Access-Control-Allow-Headers", "*")
+
+		// 2. 处理 OPTIONS 请求
+		if c.Request.Method == "OPTIONS" {
+			c.AbortWithStatus(http.StatusOK)
+			return
+		}
+
+		// 3. 限流器逻辑：获取连接
+		if !limiter.GetConn() {
+			c.String(http.StatusTooManyRequests, "Too many requests") // 使用 Gin 的输出方法
+			c.Abort()                                                 // 拦截请求，不再往下执行
+			return
+		}
+
+		// 4. 执行后续的处理函数
+		c.Next()
+
+		// 5. 请求处理完毕后：释放连接
+		limiter.Release()
 	}
 }
 
-func (m *middleWareHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+func RegisterHandlers() *gin.Engine {
+	r := gin.Default()
 
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Access-Control-Allow-Headers", "*")
-	if req.Method == "OPTIONS" {
-		w.WriteHeader(http.StatusOK)
-		return
-	}
+	// 注册全局中间件：限流 + CORS
+	r.Use(StreamMiddleware(10))
 
-	if !m.l.GetConn() {
-		sendErrorResponse(w, http.StatusTooManyRequests, "too many requests")
-		return
-	}
-	m.r.ServeHTTP(w, req)
-	m.l.Release()
-}
+	// 路由注册
+	r.GET("/videos/:vid-id", streamOssHandler)
+	r.POST("/videos/upload/:vid-id", uploadOssHandler)
+	r.GET("/testVideoPage", testPageHandler)
 
-func RegisterHandlers() *httprouter.Router {
-	router := httprouter.New()
-	router.GET("/videos/:vid-id", streamOssHandler)
-	router.POST("/videos/upload/:vid-id", uploadOssHandler)
-	router.GET("/testVideoPage", testPageHandler)
-	return router
+	return r
 }
 
 func Start() {
-	router := RegisterHandlers()
-	m := NewMiddleWareHandler(router, 10)
-	http.ListenAndServe(":9090", m)
+	r := RegisterHandlers()
+	// 注意：stream 服务监听 9090 端口
+	r.Run(":9090")
 }
-
-
-/* podman run -d \
-  --name mysql \
-  --restart=unless-stopped \
-  -p 0.0.0.0:3306:3306 \
-  -e MYSQL_ROOT_PASSWORD=123456 \
-  -e TZ=Asia/Shanghai \
-  -v /opt/containers/mysql/data:/var/lib/mysql:Z \
-  -v /opt/containers/mysql/logs:/var/log/mysql:Z \
-  docker.io/library/mysql:8.0
-
-    -v /opt/containers/mysql/my.cnf:/etc/mysql/conf.d/my.cnf:Z \ */

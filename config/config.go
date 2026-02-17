@@ -8,16 +8,20 @@ import (
 
 // Configuration 映射配置文件内容
 type Configuration struct {
-	LBAddr    string `mapstructure:"lb_addr"`
-	OssAddr   string `mapstructure:"oss_addr"`
-	OssKey    string `mapstructure:"oss_key"`
-	OssSecret string `mapstructure:"oss_secret"`
-	OssBucket string `mapstructure:"oss_bucket"`
-	OssRegion string `mapstructure:"oss_region"`
-	DbAddr    string `mapstructure:"db_addr"`
-	DbUser    string `mapstructure:"db_user"`
-	DbPwd     string `mapstructure:"db_pwd"`
-	DbName    string `mapstructure:"db_name"`
+	LBAddr               string `mapstructure:"lb_addr"`
+	OssAddr              string `mapstructure:"oss_addr"`
+	OssKey               string `mapstructure:"oss_key"`
+	OssSecret            string `mapstructure:"oss_secret"`
+	OssBucket            string `mapstructure:"oss_bucket"`
+	OssRegion            string `mapstructure:"oss_region"`
+	DbAddr               string `mapstructure:"db_addr"`
+	DbUser               string `mapstructure:"db_user"`
+	DbPwd                string `mapstructure:"db_pwd"`
+	DbName               string `mapstructure:"db_name"`
+	VideoDeleteDelayTime int    `mapstructure:"video_delete_delay_time"`
+	RedisAddr            string `mapstructure:"redis_addr"`
+	RedisPwd             string `mapstructure:"redis_pwd"`
+	RedisDB              int    `mapstructure:"redis_db"`
 }
 
 var AppConfig Configuration

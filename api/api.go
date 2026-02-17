@@ -1,31 +1,23 @@
 package api
 
 import (
-	"net/http"
-
-	"github.com/julienschmidt/httprouter"
+	"github.com/gin-gonic/gin"
 )
 
-type middleWareHandler struct {
-	r *httprouter.Router
-}
-
-func NewMiddleWareHandler(r *httprouter.Router) *middleWareHandler {
-	m := middleWareHandler{}
-	m.r = r
-	return &m
-}
-
-func (m *middleWareHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-
-	if !validateUserSession(w, req) {
-		return
+func validateUserMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if !validateUserSession(c.Writer, c.Request) {
+			//c.String(http.StatusUnauthorized, "Unauthorized")
+			c.Abort()
+			return
+		}
+		c.Next()
 	}
-	m.r.ServeHTTP(w, req)
 }
 
-func RegisterHandlers() *httprouter.Router {
-	router := httprouter.New()
+func RegisterHandlers() *gin.Engine {
+	router := gin.Default()
+	router.Use(validateUserMiddleware())
 	router.POST("/user", CreateUser)
 	router.POST("/user/:user_name", Login)
 	router.GET("/user/:user_name", GetUserInfo)
@@ -43,6 +35,5 @@ func RegisterHandlers() *httprouter.Router {
 
 func Start() {
 	r := RegisterHandlers()
-	m := NewMiddleWareHandler(r)
-	http.ListenAndServe(":8000", m)
+	r.Run(":8000")
 }

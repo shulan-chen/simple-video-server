@@ -74,7 +74,7 @@ $(document).ready(function () {
                 popupErrorMsg('Error loading lobby videos');
                 return;
             }
-            var obj = JSON.parse(res);
+            var obj = res;
             renderVideoList(obj['videos']);
         });
     });
@@ -91,7 +91,7 @@ $(document).ready(function () {
                 popupErrorMsg('Error loading my videos');
                 return;
             }
-            var obj = JSON.parse(res);
+            var obj = res;
             renderVideoList(obj['videos']);
         });
     });
@@ -127,7 +127,7 @@ $(document).ready(function () {
                 return;
             }
 
-            var obj = JSON.parse(res);
+            var obj = res;
             setCookie("sessionid", obj["session_id"], DEFAULT_COOKIE_EXPIRE_TIME);
             setCookie("username", uname, DEFAULT_COOKIE_EXPIRE_TIME);
             window.console.log("loginand set Cookie")
@@ -168,7 +168,7 @@ $(document).ready(function () {
                 return;
             }
 
-            var obj = JSON.parse(res);
+            var obj = res;
             var formData = new FormData();
             formData.append('file', $('#inputFile')[0].files[0]);
 
@@ -267,7 +267,7 @@ function initPage(callback) {
             return;
         }
 
-        var obj = JSON.parse(res);
+        var obj = res;
         uid = obj['id'];
         //window.alert(obj['id']);
         listAllVideos(function(res, err) {
@@ -276,7 +276,7 @@ function initPage(callback) {
                 popupErrorMsg('encounter an error, pls check your username or password');
                 return;
             }
-            var obj = JSON.parse(res);
+            var obj = res;
             listedVideos = obj['videos'];
             obj['videos'].forEach(function(item, index) {
                 var ele = htmlVideoListElement(item['id'], item['name'], item['create_time']);
@@ -291,7 +291,7 @@ function initPage(callback) {
             window.alert("Encountered error when loading user id");
             return;
         }
-        var obj = JSON.parse(res);
+        var obj = res;
         uid = obj['id'];
 
         // 初始化默认加载 Lobby (或者你可以选 My Videos)
@@ -347,7 +347,7 @@ function getCookie(cname) {
 
 // DOM operations
 function selectVideo(vid) {
-    var url = 'http://' + window.location.hostname + ':8080/videos/' + vid
+    var url = 'http://' + window.location.hostname + ':9090/videos/' + vid
     $("#curr-video").attr('src', url);
     $("#curr-video-name").text(currentVideo['name']);
     $("#curr-video-ctime").text('Uploaded at: ' + currentVideo['create_time']);
@@ -363,7 +363,7 @@ function refreshComments(vid) {
             return
         }
 
-        var obj = JSON.parse(res);
+        var obj = res;
         $("#comments-history").empty();
         if (obj['comments'] === null) {
             $("#comments-total").text('0 Comments');
