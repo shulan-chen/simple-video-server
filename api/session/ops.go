@@ -1,6 +1,7 @@
 package session
 
 import (
+	"strconv"
 	"sync"
 	"time"
 	api "video-server/api/defs"
@@ -31,7 +32,8 @@ func getAllKeys(m *sync.Map) []string {
 func AddNewSession(userId int, userName string) (api.SimpleSession, error) {
 	sid, _ := utils.NewUUID()
 	expire := time.Now().Add(ttl).Unix()
-	session := api.SimpleSession{SessionId: sid, UserId: userId, Username: userName, TTL: expire}
+	expireStr := strconv.FormatInt(expire, 10)
+	session := api.SimpleSession{SessionId: sid, UserId: userId, Username: userName, TTL: expireStr}
 	sessionMap.Store(sid, session)
 	err := AddSessionToRedis(sid, session)
 	if err != nil {
@@ -65,7 +67,11 @@ func IsSessionExpired(sid string) (userName string, ok bool) {
 		return existSession.Username, false
 	}
 	s := session.(api.SimpleSession)
-	if s.TTL < time.Now().Unix() {
+	ttlInt64, err := strconv.ParseInt(s.TTL, 10, 64)
+	if err != nil {
+		return s.Username, true
+	}
+	if ttlInt64 < time.Now().Unix() {
 		DeleteSession(sid)
 		return s.Username, true
 	}

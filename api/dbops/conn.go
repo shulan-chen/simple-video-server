@@ -2,13 +2,15 @@ package dbops
 
 import (
 	"fmt"
+	"video-server/api/utils"
 	"video-server/config"
 
-	_ "github.com/go-sql-driver/mysql"
-	"github.com/jmoiron/sqlx"
+	"go.uber.org/zap"
+	"gorm.io/driver/mysql"
+	"gorm.io/gorm"
 )
 
-var Db *sqlx.DB
+var Db *gorm.DB
 
 func init() {
 
@@ -20,10 +22,10 @@ func init() {
 		config.AppConfig.DbName,
 	)
 
-	database, err := sqlx.Open("mysql", dsn)
+	var err error
+	Db, err = gorm.Open(mysql.Open(dsn), &gorm.Config{})
 	if err != nil {
-		fmt.Println("open mysql failed,", err)
+		utils.Logger.Error("open mysql failed,", zap.Error(err))
 		panic(err)
 	}
-	Db = database
 }

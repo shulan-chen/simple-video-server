@@ -7,39 +7,33 @@ import (
 	"time"
 	api "video-server/api/defs"
 	"video-server/api/utils"
-
-	"go.uber.org/zap"
 )
 
 func AddUser(userName string, pwd string) (user *api.User, err error) {
-	ctime := time.Now()
-	insert, err := Db.Prepare("insert into users (name,password,creatAt) values(?,?,?)")
+	// 创建对象
+	user = &api.User{
+		Username: userName,
+		Password: pwd,
+		// CreatAt:  time.Now(), // 如果设置了 autoCreateTime tag，这里可以省略
+		// IsVaild: 0, // 默认为0的话不用写
+	}
+
+	// Create 插入数据
+	// GORM 会自动将生成的 ID 填充回 user.Id
+	err = Db.Create(user).Error
 	if err != nil {
 		return nil, err
 	}
-	defer insert.Close()
-	_, err = insert.Exec(userName, pwd, ctime)
-	if err != nil {
-		return nil, err
-	}
-	user, err = GetUserByName(userName)
-	return user, err
+	return user, nil
 }
 
 func GetUserByName(userName string) (user *api.User, err error) {
 	// 注意：这里返回单个 User，不是 slice
 	user = new(api.User)
-	err = Db.QueryRow("SELECT * FROM users WHERE name = ?", userName).
-		Scan(&user.Id, &user.Username, &user.Password, &user.IsVaild, &user.CreatAt)
-
+	err = Db.Where("name = ?", userName).First(user).Error
 	if err != nil {
-		if err == sql.ErrNoRows {
-			return nil, err
-		}
-		utils.Logger.Error("Query error:", zap.Error(err))
 		return nil, err
 	}
-
 	return user, nil
 }
 
@@ -51,17 +45,10 @@ func DeleteUser(id int, userName string) error {
 	if pUser == nil || err == sql.ErrNoRows {
 		return fmt.Errorf("user not exist")
 	}
-	deleteStatment, err := Db.Prepare("delete from users where id = ? and name = ?")
-	if err != nil {
-		panic(err)
-	}
-	defer deleteStatment.Close()
-
-	_, err = deleteStatment.Exec(pUser.Id, userName)
-	if err != nil {
-		return err
-	}
-	return nil
+	// Unscoped() 表示物理删除。如果不加，且模型有 DeletedAt 字段，则会软删除
+	// 这里的写法等同于 DELETE FROM users WHERE id=? AND name=?
+	result := Db.Where("id = ? AND name = ?", id, userName).Delete(&api.User{})
+	return result.Error
 }
 
 // video info related db ops
@@ -71,252 +58,145 @@ func AddNewVideo(aid int, name string) (*api.VideoInfo, error) {
 		panic("error to make a new uuid")
 	}
 
-	ctime := time.Now()
-	insert, err := Db.Prepare("insert into video_info (vid,author_id,name,create_time,click_count) values(?,?,?,?,?)")
-	if err != nil {
-		return nil, err
-	}
-	defer insert.Close()
-	_, err = insert.Exec(vid, aid, name, ctime, 0)
-	if err != nil {
-		return nil, err
+	video := &api.VideoInfo{
+		Vid:      vid,
+		AuthorId: aid,
+		Name:     name,
+		// CreateTime, ClickCount 会由 Tag 或数据库默认值处理
 	}
 
-	return &api.VideoInfo{Vid: vid, AuthorId: aid, Name: name, CreateTime: ctime, ClickCount: 0}, nil
+	if err := Db.Create(video).Error; err != nil {
+		return nil, err
+	}
+	return video, nil
 }
 
-func GetVideoInfo(vid string) (*api.VideoInfo, error) {
+func GetVideoInfo(vid string) (video_info *api.VideoInfo, err error) {
 	// 注意：这里返回单个 VideoInfo，不是 slice
-	videoInfo := new(api.VideoInfo)
-	stmtQuery, err := Db.Prepare("SELECT * FROM video_info WHERE vid = ?")
-	defer stmtQuery.Close()
+	videoInfo := &api.VideoInfo{}
+	err = Db.Where("vid = ?", vid).First(videoInfo).Error
 	if err != nil {
 		return nil, err
-	}
-	var Id int64
-	err = stmtQuery.QueryRow(vid).Scan(&Id, &videoInfo.Vid, &videoInfo.AuthorId, &videoInfo.Name, &videoInfo.CreateTime, &videoInfo.ClickCount)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return nil, err
-		}
 	}
 	return videoInfo, nil
 }
 
 func GetUserAllVideos(id int) ([]*api.VideoInfo, error) {
-	stmtOut, err := Db.Prepare("SELECT * FROM video_info WHERE author_id = ?")
+	var videos []*api.VideoInfo
+	err := Db.Where("author_id = ?", id).Find(&videos).Error
 	if err != nil {
 		return nil, err
 	}
-	defer stmtOut.Close()
-	rows, err := stmtOut.Query(id)
-	if err != nil {
-		return nil, err
-	}
-	var res []*api.VideoInfo
-	for rows.Next() {
-		videoInfo := new(api.VideoInfo)
-		var id int64
-		err := rows.Scan(&id, &videoInfo.Vid, &videoInfo.AuthorId, &videoInfo.Name, &videoInfo.CreateTime, &videoInfo.ClickCount)
-		if err != nil {
-			return nil, err
-		}
-		res = append(res, videoInfo)
-	}
-	return res, nil
+	return videos, nil
 }
 
 func GetAllVideoInfo() ([]*api.VideoInfo, error) {
-	stmtOut, err := Db.Prepare("SELECT * FROM video_info ORDER BY create_time DESC")
+	var videos []*api.VideoInfo
+	// Find 查询多条，Order 排序
+	err := Db.Order("create_time DESC").Find(&videos).Error
 	if err != nil {
 		return nil, err
 	}
-	defer stmtOut.Close()
-	rows, err := stmtOut.Query()
-	if err != nil {
-		return nil, err
-	}
-	var res []*api.VideoInfo
-	for rows.Next() {
-		videoInfo := new(api.VideoInfo)
-		var id int64
-		err := rows.Scan(&id, &videoInfo.Vid, &videoInfo.AuthorId, &videoInfo.Name, &videoInfo.CreateTime, &videoInfo.ClickCount)
-		if err != nil {
-			return nil, err
-		}
-		res = append(res, videoInfo)
-	}
-	return res, nil
+	return videos, nil
 }
 
 func DeleteVideoInfo(vid string) error {
-	stmtDel, err := Db.Prepare("delete from video_info where vid = ?")
-	if err != nil {
-		return err
-	}
-	defer stmtDel.Close()
-	_, err = stmtDel.Exec(vid)
-	if err != nil {
-		return err
-	}
-	return nil
+	result := Db.Where("vid = ?", vid).Delete(&api.VideoInfo{})
+	return result.Error
 }
 
 // comment related db ops
 func InsertNewComments(vid string, aid int, content string) error {
-	stmtIns, err := Db.Prepare("insert into comments (comment_id,video_id,author_id,content,create_time) values(?,?,?,?,?)")
-	if err != nil {
-		return err
-	}
-	defer stmtIns.Close()
 	comment_id, err := utils.NewUUID()
-	ctime := time.Now()
-	_, err = stmtIns.Exec(comment_id, vid, aid, content, ctime)
-	if err != nil {
+	comment := &api.Comment{
+		CommentId: comment_id,
+		VideoId:   vid,
+		AuthorId:  aid,
+		Content:   content,
+		// CreateTime 会由 Tag 或数据库默认值处理
+	}
+	if err = Db.Create(comment).Error; err != nil {
 		return err
 	}
 	return nil
 }
 
 func ListComments(vid string, from, to time.Time) ([]*api.CommentDTO, error) {
-	stmtOut, err := Db.Prepare(`select users.name,comments.comment_id,comments.content,comments.create_time
-	from comments inner join users on comments.author_id = users.id
-	where video_id = ? and create_time >= ? and create_time <= ?`)
+	var comments []*api.CommentDTO
+	// GORM 的 Raw SQL 查询映射到非 Model 结构体 (DTO)
+	// 这种场景通常用 Raw() + Scan()
+	err := Db.Raw(`
+        SELECT users.name as author_name, comments.comment_id, comments.content, comments.create_time
+        FROM comments 
+        INNER JOIN users ON comments.author_id = users.id
+        WHERE comments.video_id = ? AND comments.create_time BETWEEN ? AND ?`,
+		vid, from, to).Scan(&comments).Error
+
 	if err != nil {
 		return nil, err
 	}
-	defer stmtOut.Close()
-	rows, err := stmtOut.Query(vid, from, to)
-	if err != nil {
-		return nil, err
-	}
-	var res []*api.CommentDTO
-	for rows.Next() {
-		commentDTO := new(api.CommentDTO)
-		err := rows.Scan(&commentDTO.AuthorName, &commentDTO.CommentId, &commentDTO.Content, &commentDTO.CreateTime)
-		if err != nil {
-			return nil, err
-		}
-		res = append(res, commentDTO)
-	}
-	return res, nil
+	return comments, nil
 }
 
 // session related db ops
 func InsertNewSession(sid string, userId int, userName string, ttl int64) error {
 	ttlString := strconv.FormatInt(ttl, 10)
-	insert, err := Db.Prepare("insert into sessions (session_id,user_id, user_name, ttl) values(?, ?, ?, ?)")
-	if err != nil {
-		return err
+	newSession := &api.SimpleSession{
+		SessionId: sid,
+		UserId:    userId,
+		Username:  userName,
+		TTL:       ttlString,
 	}
-	defer insert.Close()
-	_, err = insert.Exec(sid, userId, userName, ttlString)
-	return err
-}
-
-func LoadSessionsFromDB() ([]api.SimpleSession, error) {
-	stmtOut, err := Db.Prepare("select * from sessions")
-	if err != nil {
-		panic(err)
-	}
-	defer stmtOut.Close()
-	rows, err := stmtOut.Query()
-	if err != nil {
-		panic(err)
-	}
-	var result []api.SimpleSession
-	for rows.Next() {
-		var s api.SimpleSession
-		ttl := ""
-		var id int64
-		err := rows.Scan(&id, &s.SessionId, &s.UserId, &s.Username, &ttl)
-		if err != nil {
-			panic(err)
-		}
-		s.TTL, _ = strconv.ParseInt(ttl, 10, 64)
-		result = append(result, s)
-	}
-	return result, nil
-}
-
-func LoadOneSessionFromDB(sid string) (*api.SimpleSession, error) {
-	stmtOut, err := Db.Prepare("select * from sessions where session_id = ?")
-	if err != nil {
-		panic(err)
-	}
-	defer stmtOut.Close()
-	var s api.SimpleSession
-	ttl := ""
-	var id int64
-	err = stmtOut.QueryRow(sid).Scan(&id, &s.SessionId, &s.UserId, &s.Username, &ttl)
-	if err != nil {
-		return nil, err
-	}
-	s.TTL, _ = strconv.ParseInt(ttl, 10, 64)
-	return &s, nil
-}
-
-func DeleteSessionFromDB(sid string) error {
-	stmtDel, err := Db.Prepare("delete from sessions where session_id = ?")
-	if err != nil {
-		return err
-	}
-	defer stmtDel.Close()
-	_, err = stmtDel.Exec(sid)
-	if err != nil {
+	if err := Db.Create(newSession).Error; err != nil {
 		return err
 	}
 	return nil
 }
 
+func LoadSessionsFromDB() ([]api.SimpleSession, error) {
+	var result []api.SimpleSession
+	err := Db.Find(&result).Error
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func LoadOneSessionFromDB(sid string) (*api.SimpleSession, error) {
+	var s api.SimpleSession
+	err := Db.Where("session_id = ?", sid).First(&s).Error
+	if err != nil {
+		return nil, err
+	}
+	return &s, nil
+}
+
+func DeleteSessionFromDB(sid string) error {
+	result := Db.Where("session_id = ?", sid).Delete(&api.SimpleSession{})
+	return result.Error
+}
+
 // shcheduler related db ops
 func InsertNewVideoDeletionRecord(vid string) error {
-	insert, err := Db.Prepare("insert into video_delete_record (vid) values(?)")
-	if err != nil {
-		return err
+	record := &api.VideoDeletionRecord{
+		Vid: vid,
 	}
-	defer insert.Close()
-	_, err = insert.Exec(vid)
-	if err != nil {
-		utils.Logger.Error("InsertNewVideoDeletionRecord failed", zap.Error(err))
+	if err := Db.Create(record).Error; err != nil {
 		return err
 	}
 	return nil
 }
 
 func ReadVideoDeletionRecord(count int) ([]string, error) {
-	stmtOut, err := Db.Prepare("select vid from video_delete_record limit ?")
-	if err != nil {
-		return nil, err
-	}
-	defer stmtOut.Close()
-	rows, err := stmtOut.Query(count)
-	if err != nil {
-		utils.Logger.Error("ReadVideoDeletionRecord failed", zap.Error(err))
-		return nil, err
-	}
 	var vids []string
-	for rows.Next() {
-		var vid string
-		err := rows.Scan(&vid)
-		if err != nil {
-			return nil, err
-		}
-		vids = append(vids, vid)
+	err := Db.Model(&api.VideoDeletionRecord{}).Limit(count).Pluck("vid", &vids).Error
+	if err != nil {
+		return nil, err
 	}
 	return vids, nil
 }
 
 func DeleteVideoDeletionRecord(vid string) error {
-	stmtDel, err := Db.Prepare("delete from video_delete_record where vid = ?")
-	if err != nil {
-		return err
-	}
-	defer stmtDel.Close()
-	_, err = stmtDel.Exec(vid)
-	if err != nil {
-		utils.Logger.Error("DeleteVideoDeletionRecord failed", zap.Error(err))
-		return err
-	}
-	return nil
+	result := Db.Where("vid = ?", vid).Delete(&api.VideoDeletionRecord{})
+	return result.Error
 }

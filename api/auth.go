@@ -2,13 +2,17 @@ package api
 
 import (
 	"net/http"
+	"strconv"
 	"strings"
 	api "video-server/api/defs"
-	"video-server/api/session"
+	"video-server/api/utils"
+
+	"go.uber.org/zap"
 )
 
 var HEADER_FILED_SESSION = "X-Session-Id"
 var HEADER_FILED_UNAME = "X-User-Name"
+var HEADER_FILED_UID = "X-User-Id"
 
 func validateUserSession(w http.ResponseWriter, req *http.Request) (needNextStep bool) {
 	// register and login do not need session validation
@@ -28,13 +32,21 @@ func validateUserSession(w http.ResponseWriter, req *http.Request) (needNextStep
 		sendErrorResponse(w, api.ErrorNotAuthUser)
 		return false
 	}
-	userName, expired := session.IsSessionExpired(sid)
-	if expired {
+	claims, err := utils.ParseToken(sid)
+	if err != nil {
+		utils.Logger.Error("jwt Token epired or Invaild", zap.Error(err))
 		sendErrorResponse(w, api.ErrorUserloginStatusExpired)
 		return false
 	}
+	/* userName, expired := session.IsSessionExpired(sid)
+	if expired {
+		sendErrorResponse(w, api.ErrorUserloginStatusExpired)
+		return false
+	} */
 	//session存在且没过期，就为请求加上X-User-Name头，后续的就只用校验是否存在该Header就行
-	req.Header.Add(HEADER_FILED_UNAME, userName)
+	req.Header.Add(HEADER_FILED_UNAME, claims.Username)
+	req.Header.Add(HEADER_FILED_UID, strconv.Itoa(claims.UserId))
+	utils.Logger.Info("Session valid, username " + claims.Username + "userId " + strconv.Itoa(claims.UserId))
 	return true
 }
 

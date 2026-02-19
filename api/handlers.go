@@ -2,11 +2,12 @@ package api
 
 import (
 	"database/sql"
+	"fmt"
 	"net/http"
+	"strconv"
 	"time"
 	"video-server/api/dbops"
 	api "video-server/api/defs"
-	"video-server/api/session"
 	"video-server/api/utils"
 
 	"github.com/gin-gonic/gin"
@@ -62,17 +63,18 @@ func Login(c *gin.Context) {
 		return
 	}
 
-	simplesession, err := session.AddNewSession(pUser.Id, pUser.Username)
+	//simplesession, err := session.AddNewSession(pUser.Id, pUser.Username)
+	jwtString, err := utils.GenerateToken(pUser.Username, pUser.Id)
 	su := api.SignedUP{
-		SessionId: simplesession.SessionId,
+		SessionId: jwtString,
 		Success:   true,
 	}
 	c.JSON(http.StatusOK, su)
 }
 
 func Logout(c *gin.Context) {
-	sid := c.Request.Header.Get(HEADER_FILED_SESSION)
-	session.DeleteSession(sid)
+	//sid := c.Request.Header.Get(HEADER_FILED_SESSION)
+	//session.DeleteSession(sid)
 	sendNormalResponse(c.Writer, "logout success", 200)
 }
 
@@ -112,15 +114,10 @@ func ListUserAllVideos(c *gin.Context) {
 	if !ValidateUser(c.Writer, c.Request) {
 		return
 	}
-
-	uname := c.Param("user_name")
-	user, err := dbops.GetUserByName(uname)
-	if err != nil {
-		utils.Logger.Error("GetUserByName failed", zap.Error(err))
-		sendErrorResponse(c.Writer, api.ErrorDBError)
-		return
-	}
-	videoInfos, err := dbops.GetUserAllVideos(user.Id)
+	uid := c.Request.Header.Get(HEADER_FILED_UID)
+	uidInt, _ := strconv.Atoi(uid)
+	fmt.Printf("ListUserAllVideos, uid %d\n", uidInt)
+	videoInfos, err := dbops.GetUserAllVideos(uidInt)
 	if err != nil {
 		utils.Logger.Error("GetUserAllVideos failed", zap.Error(err))
 		sendErrorResponse(c.Writer, api.ErrorDBError)
@@ -150,13 +147,8 @@ func DeleteVideoInfo(c *gin.Context) {
 	if !ValidateUser(c.Writer, c.Request) {
 		return
 	}
-	userName := c.Param("user_name")
-	user, err := dbops.GetUserByName(userName)
-	if err != nil {
-		utils.Logger.Error("GetUserByName failed", zap.Error(err))
-		sendErrorResponse(c.Writer, api.ErrorDBError)
-		return
-	}
+	uid := c.Request.Header.Get(HEADER_FILED_UID)
+	uidInt, _ := strconv.Atoi(uid)
 	vid := c.Param("vid")
 	existedVideo, err := dbops.GetVideoInfo(vid)
 	if err != nil {
@@ -165,7 +157,7 @@ func DeleteVideoInfo(c *gin.Context) {
 			return
 		}
 	}
-	if existedVideo.AuthorId != user.Id {
+	if existedVideo.AuthorId != uidInt {
 		sendErrorResponse(c.Writer, api.ErrorVideoNotMatchToUser)
 		return
 	}
