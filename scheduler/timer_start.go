@@ -1,33 +1,49 @@
 package scheduler
 
 import (
+	"log"
 	"time"
-	"video-server/config"
+	"video-server/internal/config"
 )
 
 type Worker struct {
-	Runner *Runner
-	ticker *time.Ticker
+	Runner    *Runner
+	ticker    *time.Ticker
+	done      chan struct{} // 用于通知停止
+	StartTime time.Time     // 启动时间
 }
 
 func NewWorker(interval time.Duration, r *Runner) *Worker {
 	return &Worker{
-		Runner: r,
-		ticker: time.NewTicker(interval),
+		Runner:    r,
+		ticker:    time.NewTicker(interval),
+		done:      make(chan struct{}),
+		StartTime: time.Now(),
 	}
 }
 
-func (w *Worker) startWorker() {
+// StartWorker 启动worker（导出方法）
+func (w *Worker) StartWorker() {
 	for {
 		select {
 		case <-w.ticker.C:
 			go w.Runner.Start()
+		case <-w.done:
+			log.Println("[Worker] 收到停止信号，正在停止...")
+			w.ticker.Stop()
+			return
 		}
 	}
 }
 
+// Stop 停止worker
+func (w *Worker) Stop() {
+	close(w.done)
+}
+
+// 旧的Start方法保持兼容性（但不推荐使用）
 func Start() {
 	r := NewRunner(3, true, VideoClearDispatcher, VideoClearExecutor)
 	w := NewWorker(time.Duration(config.AppConfig.VideoDeleteDelayTime)*time.Second, r)
-	w.startWorker()
+	w.StartWorker()
 }

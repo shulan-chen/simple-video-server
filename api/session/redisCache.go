@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	api "video-server/api/defs"
 
-	"video-server/config"
+	"video-server/internal/config"
 
 	"github.com/go-redis/redis/v8"
 )

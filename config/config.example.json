@@ -1,0 +1,18 @@
+{
+    "api_addr": ":8000",
+    "web_addr": ":8080",
+    "stream_addr": ":9090",
+    "oss_addr": "oss-cn-shanghai.aliyuncs.com",
+    "oss_region": "cn-shanghai",
+    "oss_key": "YOUR_OSS_KEY",
+    "oss_secret": "YOUR_OSS_SECRET",
+    "oss_bucket": "your-bucket-name",
+    "db_addr": "localhost:3306",
+    "db_user": "root",
+    "db_pwd": "password",
+    "db_name": "video_server",
+    "video_delete_delay_time": 300,
+    "redis_addr": "localhost:6379",
+    "redis_pwd": "",
+    "redis_db": 0
+}

@@ -6,7 +6,7 @@ import (
 	"io"
 	"time"
 	"video-server/api/utils"
-	"video-server/config"
+	"video-server/internal/config"
 
 	"github.com/aliyun/alibabacloud-oss-go-sdk-v2/oss"
 	"github.com/aliyun/alibabacloud-oss-go-sdk-v2/oss/credentials"

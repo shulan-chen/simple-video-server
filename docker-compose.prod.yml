@@ -1,0 +1,116 @@
+# docker-compose.prod.yml - 生产环境（只部署服务，连接外部数据库）
+#
+# 使用场景：
+# - 生产环境部署（已有独立的MySQL/Redis）
+# - 连接阿里云的MySQL和Redis
+# - 只部署4个微服务
+#
+# 使用方法：
+#   docker-compose -f docker-compose.prod.yml up -d
+#
+# 注意：
+#   需要修改environment中的DB_ADDR和REDIS_ADDR为实际地址
+
+version: '3.3'
+
+services:
+  # API服务
+  api-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE_NAME: api
+    container_name: video-server-api
+    ports:
+      - "8000:8000"
+    environment:
+      - CONFIG_PATH=/app/config/config.json
+      # 这里使用环境变量覆盖配置文件中的地址
+      # ⚠️ 注意：需要改成你的实际MySQL和Redis地址
+      - DB_ADDR=139.196.242.169:3306
+      - REDIS_ADDR=139.196.242.169:6379
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    networks:
+      - video-network
+    restart: unless-stopped
+
+  # Web服务
+  web-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE_NAME: web
+    container_name: video-server-web
+    ports:
+      - "8080:8080"
+    environment:
+      - CONFIG_PATH=/app/config/config.json
+      - API_ADDR=http://api-service:8000
+      - STREAM_ADDR=http://stream-service:9090
+    depends_on:
+      api-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - video-network
+    restart: unless-stopped
+
+  # Stream服务
+  stream-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE_NAME: stream
+    container_name: video-server-stream
+    ports:
+      - "9090:9090"
+    environment:
+      - CONFIG_PATH=/app/config/config.json
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9090/health/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - video-network
+    restart: unless-stopped
+
+  # Scheduler服务
+  scheduler-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE_NAME: scheduler
+    container_name: video-server-scheduler
+    ports:
+      - "8001:8001"
+    environment:
+      - CONFIG_PATH=/app/config/config.json
+      - DB_ADDR=139.196.242.169:3306
+      - REDIS_ADDR=139.196.242.169:6379
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - video-network
+    restart: unless-stopped
+
+# 网络定义
+networks:
+  video-network:
+    driver: bridge

@@ -1,0 +1,57 @@
+# 为什么需要.dockerignore？
+# 1. 减少构建上下文大小（加快构建速度）
+# 2. 避免将敏感文件打入镜像
+# 3. 避免将无用文件打入镜像
+
+# Git相关
+.git
+.gitignore
+
+# 编译产物
+bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+server
+video-server
+
+# 日志文件
+logs/
+*.log
+app.log
+
+# 测试文件
+*_test.go
+coverage.txt
+coverage.html
+
+# 视频文件
+videos/
+*.mp4
+*.avi
+*.mov
+
+# IDE配置
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# 依赖（会在构建时重新下载）
+vendor/
+
+# 文档
+README.md
+*.md
+
+# 旧脚本
+start.sh
+stop.sh
+
+# Docker相关
+Dockerfile
+docker-compose.yml
+.dockerignore

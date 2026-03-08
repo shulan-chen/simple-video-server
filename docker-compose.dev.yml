@@ -1,0 +1,158 @@
+# docker-compose.dev.yml - 本地开发环境（包含所有依赖）
+#
+# 使用场景：
+# - 本地开发时一键启动完整环境
+# - 不依赖外部MySQL/Redis
+# - 适合新手学习和测试
+#
+# 使用方法：
+#   docker-compose -f docker-compose.dev.yml up -d
+
+version: '3.3'
+
+services:
+  # MySQL数据库
+  mysql:
+    image: mysql:8.0
+    container_name: video-server-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: 123456
+      MYSQL_DATABASE: video_server
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - video-network
+
+  # Redis缓存
+  redis:
+    image: redis:7-alpine
+    container_name: video-server-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - video-network
+
+  # API服务
+  api-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE_NAME: api
+    container_name: video-server-api
+    ports:
+      - "8000:8000"
+    environment:
+      - CONFIG_PATH=/app/config/config.json
+      - DB_ADDR=mysql:3306
+      - REDIS_ADDR=redis:6379
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - video-network
+    restart: unless-stopped
+
+  # Web服务
+  web-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE_NAME: web
+    container_name: video-server-web
+    ports:
+      - "8080:8080"
+    environment:
+      - CONFIG_PATH=/app/config/config.json
+      - API_ADDR=http://api-service:8000
+      - STREAM_ADDR=http://stream-service:9090
+    depends_on:
+      api-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - video-network
+    restart: unless-stopped
+
+  # Stream服务
+  stream-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE_NAME: stream
+    container_name: video-server-stream
+    ports:
+      - "9090:9090"
+    environment:
+      - CONFIG_PATH=/app/config/config.json
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9090/health/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - video-network
+    restart: unless-stopped
+
+  # Scheduler服务
+  scheduler-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE_NAME: scheduler
+    container_name: video-server-scheduler
+    ports:
+      - "8001:8001"
+    environment:
+      - CONFIG_PATH=/app/config/config.json
+      - DB_ADDR=mysql:3306
+      - REDIS_ADDR=redis:6379
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - video-network
+    restart: unless-stopped
+
+# 网络定义
+networks:
+  video-network:
+    driver: bridge
+
+# 数据卷定义
+volumes:
+  mysql_data:
+    driver: local

@@ -6,6 +6,18 @@ import (
 
 func validateUserMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		// 健康检查路径跳过认证
+		// 为什么要这样做？
+		// 1. K8s需要通过健康检查判断服务状态
+		// 2. 健康检查不应该需要认证
+		// 3. 否则服务永远不会被标记为ready
+		if c.Request.URL.Path == "/health/live" ||
+			c.Request.URL.Path == "/health/ready" ||
+			c.Request.URL.Path == "/health/startup" {
+			c.Next()
+			return
+		}
+
 		if !validateUserSession(c.Writer, c.Request) {
 			//c.String(http.StatusUnauthorized, "Unauthorized")
 			c.Abort()

@@ -1,0 +1,102 @@
+# docker-compose.yml - 默认配置（生产环境）
+#
+# 这是默认配置，使用时会连接外部MySQL和Redis
+# 如果你想要本地开发环境（包含MySQL/Redis），请使用：
+#   docker-compose -f docker-compose.dev.yml up -d
+#
+# 当前配置等同于 docker-compose.prod.yml
+
+version: '3.3'
+
+services:
+  api-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE_NAME: api
+    container_name: video-server-api
+    ports:
+      - "8000:8000"
+    environment:
+      - CONFIG_PATH=/app/config/config.json
+      - DB_ADDR=139.196.242.169:3306
+      - REDIS_ADDR=139.196.242.169:6379
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    networks:
+      - video-network
+    restart: unless-stopped
+
+  web-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE_NAME: web
+    container_name: video-server-web
+    ports:
+      - "8080:8080"
+    environment:
+      - CONFIG_PATH=/app/config/config.json
+    depends_on:
+      api-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - video-network
+    restart: unless-stopped
+
+  stream-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE_NAME: stream
+    container_name: video-server-stream
+    ports:
+      - "9090:9090"
+    environment:
+      - CONFIG_PATH=/app/config/config.json
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9090/health/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - video-network
+    restart: unless-stopped
+
+  scheduler-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE_NAME: scheduler
+    container_name: video-server-scheduler
+    ports:
+      - "8001:8001"
+    environment:
+      - CONFIG_PATH=/app/config/config.json
+      - DB_ADDR=139.196.242.169:3306
+      - REDIS_ADDR=139.196.242.169:6379
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - video-network
+    restart: unless-stopped
+
+networks:
+  video-network:
+    driver: bridge
