@@ -1,14 +1,33 @@
 package utils
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
+	"os"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 )
 
-var ttl = time.Duration(30 * time.Minute)
-var jwtSecret = []byte("your_secret_key")
+var (
+	// Access Token 有效期：15分钟
+	accessTokenTTL = 15 * time.Minute
+	// Refresh Token 有效期：7天
+	refreshTokenTTL = 7 * 24 * time.Hour
+	// JWT签名密钥（从环境变量读取）
+	jwtSecret = getJWTSecret()
+)
+
+func getJWTSecret() []byte {
+	secret := os.Getenv("JWT_SECRET")
+	if secret == "" {
+		// 开发环境默认值
+		Logger.Warn("JWT_SECRET未设置，使用默认值（生产环境必须设置）")
+		secret = "dev-secret-key-change-in-production"
+	}
+	return []byte(secret)
+}
 
 type Claims struct {
 	UserId   int    `json:"user_id"`
@@ -16,9 +35,9 @@ type Claims struct {
 	jwt.RegisteredClaims
 }
 
-// GenerateToken 生成 Token
-func GenerateToken(username string, userId int) (string, error) {
-	expirationTime := time.Now().Add(ttl) // 有效期 30 分钟
+// GenerateAccessToken 生成 Access Token（短期，15分钟）
+func GenerateAccessToken(username string, userId int) (string, error) {
+	expirationTime := time.Now().Add(accessTokenTTL)
 	claims := &Claims{
 		Username: username,
 		UserId:   userId,
@@ -30,11 +49,29 @@ func GenerateToken(username string, userId int) (string, error) {
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	tokenString, err := token.SignedString(jwtSecret)
-	return tokenString, err
+	return token.SignedString(jwtSecret)
 }
 
-// ParseToken 解析 Token
+// GenerateRefreshToken 生成 Refresh Token（随机字符串，需存储到Redis）
+func GenerateRefreshToken() (string, error) {
+	bytes := make([]byte, 32) // 32字节 = 64字符十六进制
+	if _, err := rand.Read(bytes); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(bytes), nil
+}
+
+// GetRefreshTokenTTL 获取 Refresh Token 有效期
+func GetRefreshTokenTTL() time.Duration {
+	return refreshTokenTTL
+}
+
+// GetAccessTokenTTL 获取 Access Token 有效期（秒）
+func GetAccessTokenTTL() int {
+	return int(accessTokenTTL.Seconds())
+}
+
+// ParseToken 解析 Access Token
 func ParseToken(tokenString string) (*Claims, error) {
 	claims := &Claims{}
 	token, err := jwt.ParseWithClaims(tokenString, claims,
@@ -51,4 +88,9 @@ func ParseToken(tokenString string) (*Claims, error) {
 	}
 
 	return claims, nil
+}
+
+// GenerateToken 兼容旧代码（废弃，使用 GenerateAccessToken）
+func GenerateToken(username string, userId int) (string, error) {
+	return GenerateAccessToken(username, userId)
 }

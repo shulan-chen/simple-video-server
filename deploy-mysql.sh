@@ -35,7 +35,7 @@ fi
 # 创建数据持久化目录
 echo ""
 echo "创建数据持久化目录..."
-mkdir -p ~/mysql_data
+mkdir -p ~/data/mysql_data
 
 # 启动MySQL容器
 echo ""
@@ -48,7 +48,7 @@ docker run -d \
     -e MYSQL_DATABASE=$MYSQL_DATABASE \
     -e MYSQL_USER=$MYSQL_USER \
     -e MYSQL_PASSWORD=$MYSQL_PASSWORD \
-    -v ~/mysql_data:/var/lib/mysql \
+    -v ~/data/mysql_data:/var/lib/mysql \
     mysql:8.0 \
     --character-set-server=utf8mb4 \
     --collation-server=utf8mb4_unicode_ci
@@ -87,7 +87,7 @@ echo ""
 echo "容器信息："
 echo "  容器名称: $CONTAINER_NAME"
 echo "  端口映射: 0.0.0.0:$MYSQL_PORT -> 3306"
-echo "  数据目录: ~/mysql_data"
+echo "  数据目录: ~/data/mysql_data"
 echo ""
 echo "连接信息："
 echo "  地址: localhost:$MYSQL_PORT"

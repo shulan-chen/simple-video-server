@@ -1,25 +1,66 @@
 package api
 
 import (
+	"net/http"
+	"os"
+
 	"github.com/gin-gonic/gin"
 )
 
+// corsMiddleware 处理跨域请求
+func corsMiddleware() gin.HandlerFunc {
+	// 从环境变量读取允许的源，默认为本地开发环境
+	allowedOrigin := os.Getenv("ALLOWED_ORIGIN")
+	if allowedOrigin == "" {
+		allowedOrigin = "http://localhost:8080" // 默认允许Web服务
+	}
+
+	return func(c *gin.Context) {
+		origin := c.Request.Header.Get("Origin")
+		if origin == allowedOrigin {
+			c.Writer.Header().Set("Access-Control-Allow-Origin", origin)
+			c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
+			c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
+			c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-Session-Id")
+		}
+
+		// 处理OPTIONS预检请求
+		if c.Request.Method == "OPTIONS" {
+			c.AbortWithStatus(http.StatusNoContent)
+			return
+		}
+
+		c.Next()
+	}
+}
+
 func validateUserMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// 健康检查路径跳过认证
-		// 为什么要这样做？
-		// 1. K8s需要通过健康检查判断服务状态
-		// 2. 健康检查不应该需要认证
-		// 3. 否则服务永远不会被标记为ready
-		if c.Request.URL.Path == "/health/live" ||
-			c.Request.URL.Path == "/health/ready" ||
-			c.Request.URL.Path == "/health/startup" {
+		// 跳过认证的路径
+		skipPaths := []string{
+			"/health/live",
+			"/health/ready",
+			"/health/startup",
+			"/user",            // 注册
+			"/auth/refresh",    // 刷新token
+		}
+
+		// 检查是否是需要跳过的路径
+		for _, path := range skipPaths {
+			if c.Request.URL.Path == path {
+				c.Next()
+				return
+			}
+		}
+
+		// 检查是否是登录路径（/user/:username）
+		if c.Request.Method == "POST" && len(c.Request.URL.Path) > 6 && c.Request.URL.Path[:6] == "/user/" {
 			c.Next()
 			return
 		}
 
+		// 其他路径需要认证
 		if !validateUserSession(c.Writer, c.Request) {
-			//c.String(http.StatusUnauthorized, "Unauthorized")
 			c.Abort()
 			return
 		}
@@ -29,9 +70,15 @@ func validateUserMiddleware() gin.HandlerFunc {
 
 func RegisterHandlers() *gin.Engine {
 	router := gin.Default()
-	router.Use(validateUserMiddleware())
+	router.Use(corsMiddleware())         // CORS中间件（第一个执行）
+	router.Use(validateUserMiddleware()) // 认证中间件
+
+	// 认证相关（不需要token）
 	router.POST("/user", CreateUser)
 	router.POST("/user/:user_name", Login)
+	router.POST("/auth/refresh", RefreshToken) // 刷新token（不需要access token）
+
+	// 用户相关（需要token）
 	router.GET("/user/:user_name", GetUserInfo)
 	router.POST("/user/:user_name/logout", Logout)
 

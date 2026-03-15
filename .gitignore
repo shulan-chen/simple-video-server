@@ -5,4 +5,4 @@ go.sum
 server
 app.log
 config/config.json
-ducuments/
+logs/

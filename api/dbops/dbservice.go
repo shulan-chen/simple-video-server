@@ -30,7 +30,16 @@ func AddUser(userName string, pwd string) (user *api.User, err error) {
 func GetUserByName(userName string) (user *api.User, err error) {
 	// 注意：这里返回单个 User，不是 slice
 	user = new(api.User)
-	err = Db.Where("name = ?", userName).First(user).Error
+	err = Db.Where("name = @userName", sql.Named("userName", userName)).First(user).Error
+	if err != nil {
+		return nil, err
+	}
+	return user, nil
+}
+
+func GetUserById(userId int) (user *api.User, err error) {
+	user = new(api.User)
+	err = Db.Where("id = @userId", sql.Named("userId", userId)).First(user).Error
 	if err != nil {
 		return nil, err
 	}
@@ -46,8 +55,10 @@ func DeleteUser(id int, userName string) error {
 		return fmt.Errorf("user not exist")
 	}
 	// Unscoped() 表示物理删除。如果不加，且模型有 DeletedAt 字段，则会软删除
-	// 这里的写法等同于 DELETE FROM users WHERE id=? AND name=?
-	result := Db.Where("id = ? AND name = ?", id, userName).Delete(&api.User{})
+	// 这里的写法等同于 DELETE FROM users WHERE id=@id AND name=@userName
+	result := Db.Where("id = @id AND name = @userName",
+		sql.Named("id", id),
+		sql.Named("userName", userName)).Delete(&api.User{})
 	return result.Error
 }
 
@@ -74,7 +85,7 @@ func AddNewVideo(aid int, name string) (*api.VideoInfo, error) {
 func GetVideoInfo(vid string) (video_info *api.VideoInfo, err error) {
 	// 注意：这里返回单个 VideoInfo，不是 slice
 	videoInfo := &api.VideoInfo{}
-	err = Db.Where("vid = ?", vid).First(videoInfo).Error
+	err = Db.Where("vid = @vid", sql.Named("vid", vid)).First(videoInfo).Error
 	if err != nil {
 		return nil, err
 	}
@@ -83,7 +94,7 @@ func GetVideoInfo(vid string) (video_info *api.VideoInfo, err error) {
 
 func GetUserAllVideos(id int) ([]*api.VideoInfo, error) {
 	var videos []*api.VideoInfo
-	err := Db.Where("author_id = ?", id).Find(&videos).Error
+	err := Db.Where("author_id = @authorId", sql.Named("authorId", id)).Find(&videos).Error
 	if err != nil {
 		return nil, err
 	}
@@ -101,7 +112,7 @@ func GetAllVideoInfo() ([]*api.VideoInfo, error) {
 }
 
 func DeleteVideoInfo(vid string) error {
-	result := Db.Where("vid = ?", vid).Delete(&api.VideoInfo{})
+	result := Db.Where("vid = @vid", sql.Named("vid", vid)).Delete(&api.VideoInfo{})
 	return result.Error
 }
 
@@ -127,10 +138,12 @@ func ListComments(vid string, from, to time.Time) ([]*api.CommentDTO, error) {
 	// 这种场景通常用 Raw() + Scan()
 	err := Db.Raw(`
         SELECT users.name as author_name, comments.comment_id, comments.content, comments.create_time
-        FROM comments 
+        FROM comments
         INNER JOIN users ON comments.author_id = users.id
-        WHERE comments.video_id = ? AND comments.create_time BETWEEN ? AND ?`,
-		vid, from, to).Scan(&comments).Error
+        WHERE comments.video_id = @vid AND comments.create_time BETWEEN @from AND @to`,
+		sql.Named("vid", vid),
+		sql.Named("from", from),
+		sql.Named("to", to)).Scan(&comments).Error
 
 	if err != nil {
 		return nil, err
@@ -164,7 +177,7 @@ func LoadSessionsFromDB() ([]api.SimpleSession, error) {
 
 func LoadOneSessionFromDB(sid string) (*api.SimpleSession, error) {
 	var s api.SimpleSession
-	err := Db.Where("session_id = ?", sid).First(&s).Error
+	err := Db.Where("session_id = @sid", sql.Named("sid", sid)).First(&s).Error
 	if err != nil {
 		return nil, err
 	}
@@ -172,7 +185,7 @@ func LoadOneSessionFromDB(sid string) (*api.SimpleSession, error) {
 }
 
 func DeleteSessionFromDB(sid string) error {
-	result := Db.Where("session_id = ?", sid).Delete(&api.SimpleSession{})
+	result := Db.Where("session_id = @sid", sql.Named("sid", sid)).Delete(&api.SimpleSession{})
 	return result.Error
 }
 
@@ -197,6 +210,6 @@ func ReadVideoDeletionRecord(count int) ([]string, error) {
 }
 
 func DeleteVideoDeletionRecord(vid string) error {
-	result := Db.Where("vid = ?", vid).Delete(&api.VideoDeletionRecord{})
+	result := Db.Where("vid = @vid", sql.Named("vid", vid)).Delete(&api.VideoDeletionRecord{})
 	return result.Error
 }

@@ -2,6 +2,7 @@ package stream
 
 import (
 	"net/http"
+	"os"
 
 	"github.com/gin-gonic/gin"
 )
@@ -10,14 +11,25 @@ import (
 func StreamMiddleware(connLimitNumber int) gin.HandlerFunc {
 	limiter := NewConnLimiter(connLimitNumber)
 
-	return func(c *gin.Context) {
-		// 1. 设置 CORS 头
-		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
-		c.Writer.Header().Set("Access-Control-Allow-Headers", "*")
+	// 从环境变量读取允许的源，默认为本地开发环境
+	allowedOrigin := os.Getenv("ALLOWED_ORIGIN")
+	if allowedOrigin == "" {
+		allowedOrigin = "http://localhost:8080" // 默认允许Web服务
+	}
 
-		// 2. 处理 OPTIONS 请求
+	return func(c *gin.Context) {
+		// 1. 设置 CORS 头（只允许指定的源）
+		origin := c.Request.Header.Get("Origin")
+		if origin == allowedOrigin {
+			c.Writer.Header().Set("Access-Control-Allow-Origin", origin)
+			c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
+			c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+			c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-Session-Id")
+		}
+
+		// 2. 处理 OPTIONS 预检请求
 		if c.Request.Method == "OPTIONS" {
-			c.AbortWithStatus(http.StatusOK)
+			c.AbortWithStatus(http.StatusNoContent)
 			return
 		}
 
