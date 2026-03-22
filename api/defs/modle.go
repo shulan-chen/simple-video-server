@@ -1,13 +1,18 @@
 package api
 
-import "time"
+import (
+	"time"
+
+	"gorm.io/gorm"
+)
 
 type User struct {
-	Id        int       `json:"id" gorm:"primaryKey;autoIncrement;column:id"`
-	Username  string    `json:"name" gorm:"column:name;unique"`
-	Password  string    `json:"password" gorm:"column:password"`
-	IsVaild   int       `json:"isVaild" gorm:"column:isVaild"`
-	CreatedAt time.Time `json:"created_at" gorm:"column:created_at;autoCreateTime"`
+	Id        int            `json:"id" gorm:"primaryKey;autoIncrement;column:id"`
+	Username  string         `json:"name" gorm:"column:name;unique"`
+	Password  string         `json:"password" gorm:"column:password"`
+	IsVaild   int            `json:"isVaild" gorm:"column:isVaild"`
+	CreatedAt time.Time      `json:"created_at" gorm:"column:created_at;autoCreateTime"`
+	DeletedAt gorm.DeletedAt `json:"-" gorm:"column:deleted_at;index"`
 }
 
 // TableName 指定 User 结构体对应的表名为 "users"
@@ -26,12 +31,13 @@ type SignedUP struct {
 }
 
 type VideoInfo struct {
-	Id          int       `gorm:"primaryKey;autoIncrement;column:id"`
-	Vid         string    `json:"id" gorm:"column:vid"`
-	AuthorId    int       `json:"author_id" gorm:"column:author_id"`
-	Name        string    `json:"name" gorm:"column:name"`
-	CreatedTime time.Time `json:"create_time" gorm:"column:create_time;autoCreateTime"`
-	ClickCount  int       `json:"click_count" gorm:"column:click_count"`
+	Id          int            `gorm:"primaryKey;autoIncrement;column:id"`
+	Vid         string         `json:"id" gorm:"column:vid"`
+	AuthorId    int            `json:"author_id" gorm:"column:author_id"`
+	Name        string         `json:"name" gorm:"column:name"`
+	CreatedTime time.Time      `json:"create_time" gorm:"column:create_time;autoCreateTime"`
+	ClickCount  int            `json:"click_count" gorm:"column:click_count"`
+	DeletedAt   gorm.DeletedAt `json:"-" gorm:"column:deleted_at;index"`
 }
 
 func (VideoInfo) TableName() string {
@@ -53,12 +59,13 @@ func (VideoDeletionRecord) TableName() string {
 
 // comment related db ops
 type Comment struct {
-	Id         int       `gorm:"primaryKey;autoIncrement;column:id"`
-	CommentId  string    `json:"commentId" gorm:"column:comment_id"`
-	VideoId    string    `json:"video_id" gorm:"column:video_id"`
-	AuthorId   int       `json:"author_id" gorm:"column:author_id"`
-	Content    string    `json:"content" gorm:"column:content"`
-	CreateTime time.Time `json:"create_time" gorm:"column:create_time;autoCreateTime"`
+	Id         int            `gorm:"primaryKey;autoIncrement;column:id"`
+	CommentId  string         `json:"commentId" gorm:"column:comment_id"`
+	VideoId    string         `json:"video_id" gorm:"column:video_id"`
+	AuthorId   int            `json:"author_id" gorm:"column:author_id"`
+	Content    string         `json:"content" gorm:"column:content"`
+	CreateTime time.Time      `json:"create_time" gorm:"column:create_time;autoCreateTime"`
+	DeletedAt  gorm.DeletedAt `json:"-" gorm:"column:deleted_at;index"`
 }
 
 func (Comment) TableName() string {

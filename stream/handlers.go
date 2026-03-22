@@ -16,95 +16,140 @@ var VIDEO_DIR = "./videos/"
 var MAX_UPLOAD_SIZE int64 = 1024 * 1024 * 100 // 100MB
 
 func streamLocalHandler(c *gin.Context) {
+	traceID := c.GetString("trace_id")
 	vid := c.Param("vid-id")
 	video_storePath := VIDEO_DIR + vid
 
 	video, err := os.Open(video_storePath)
 	if err != nil {
-		utils.Logger.Error("Open file error", zap.Error(err))
-		c.String(http.StatusInternalServerError, "Internal server error")
+		utils.Logger.Error("打开视频文件失败",
+			zap.String("trace_id", traceID),
+			zap.String("video_id", vid),
+			zap.String("path", video_storePath),
+			zap.Error(err))
+		utils.AbortWithError(c, utils.ErrStreamFileRead, err)
 		return
 	}
 	defer video.Close()
+
 	c.Header("Content-Type", "video/mp4")
 	http.ServeContent(c.Writer, c.Request, "", time.Now(), video)
 }
 
 func streamOssHandler(c *gin.Context) {
+	traceID := c.GetString("trace_id")
 	vid := c.Param("vid-id")
-	// 调用 GetOssVideoURL 获取带签名的 URL
+
 	targetUrl, err := GetOssVideoURL(c.Request.Context(), vid)
 	if err != nil {
-		utils.Logger.Error("Get OSS URL error", zap.Error(err))
-		c.String(http.StatusInternalServerError, "Internal server error")
+		utils.Logger.Error("生成OSS URL失败",
+			zap.String("trace_id", traceID),
+			zap.String("video_id", vid),
+			zap.Error(err))
+		utils.AbortWithError(c, utils.ErrStreamOSSSignURL, err)
 		return
 	}
+
 	c.Redirect(http.StatusMovedPermanently, targetUrl)
 }
 
 func uploadLocalHandler(c *gin.Context) {
+	traceID := c.GetString("trace_id")
 	req := c.Request
+	vid := c.Param("vid-id")
+
 	req.Body = http.MaxBytesReader(c.Writer, req.Body, MAX_UPLOAD_SIZE)
-	err := req.ParseMultipartForm(MAX_UPLOAD_SIZE)
-	if err != nil {
-		utils.Logger.Error("Parse multipart form error", zap.Error(err))
-		c.String(http.StatusBadRequest, "File too large")
+	if err := req.ParseMultipartForm(MAX_UPLOAD_SIZE); err != nil {
+		utils.Logger.Error("解析表单失败",
+			zap.String("trace_id", traceID),
+			zap.String("video_id", vid),
+			zap.Error(err))
+		utils.AbortWithError(c, utils.ErrStreamFileTooLarge, err)
 		return
 	}
 
 	file, _, err := req.FormFile("file")
 	if err != nil {
-		utils.Logger.Error("Get form file error", zap.Error(err))
-		c.String(http.StatusInternalServerError, "Internal server error")
+		utils.Logger.Error("获取上传文件失败",
+			zap.String("trace_id", traceID),
+			zap.String("video_id", vid),
+			zap.Error(err))
+		utils.AbortWithError(c, utils.ErrStreamMissingFile, err)
 		return
 	}
 	defer file.Close()
 
-	vid := c.Param("vid-id")
 	video_storePath := VIDEO_DIR + vid
 	out, err := os.Create(video_storePath)
 	if err != nil {
-		utils.Logger.Error("Create file error", zap.Error(err))
-		c.String(http.StatusInternalServerError, "Internal server error")
+		utils.Logger.Error("创建文件失败",
+			zap.String("trace_id", traceID),
+			zap.String("video_id", vid),
+			zap.String("path", video_storePath),
+			zap.Error(err))
+		utils.AbortWithError(c, utils.ErrStreamFileCreate, err)
 		return
 	}
 	defer out.Close()
-	_, err = io.Copy(out, file)
-	if err != nil {
-		utils.Logger.Error("Write file error", zap.Error(err))
-		c.String(http.StatusInternalServerError, "Internal server error")
+
+	if _, err = io.Copy(out, file); err != nil {
+		utils.Logger.Error("写入文件失败",
+			zap.String("trace_id", traceID),
+			zap.String("video_id", vid),
+			zap.Error(err))
+		utils.AbortWithError(c, utils.ErrStreamFileWrite, err)
 		return
 	}
-	c.String(http.StatusOK, "Upload success")
+
+	utils.Logger.Info("上传视频成功",
+		zap.String("trace_id", traceID),
+		zap.String("video_id", vid))
+
+	c.JSON(http.StatusOK, gin.H{"message": "上传成功"})
 }
 
 func uploadOssHandler(c *gin.Context) {
+	traceID := c.GetString("trace_id")
 	req := c.Request
+	vid := c.Param("vid-id")
+
 	req.Body = http.MaxBytesReader(c.Writer, req.Body, MAX_UPLOAD_SIZE)
-	err := req.ParseMultipartForm(MAX_UPLOAD_SIZE)
-	if err != nil {
-		utils.Logger.Error("Parse multipart form error", zap.Error(err))
-		c.String(http.StatusBadRequest, "File too large")
+	if err := req.ParseMultipartForm(MAX_UPLOAD_SIZE); err != nil {
+		utils.Logger.Error("解析表单失败",
+			zap.String("trace_id", traceID),
+			zap.String("video_id", vid),
+			zap.Error(err))
+		utils.AbortWithError(c, utils.ErrStreamFileTooLarge, err)
 		return
 	}
 
 	file, header, err := req.FormFile("file")
 	if err != nil {
-		utils.Logger.Error("Get form file error", zap.Error(err))
-		c.String(http.StatusInternalServerError, "Internal server error")
+		utils.Logger.Error("获取上传文件失败",
+			zap.String("trace_id", traceID),
+			zap.String("video_id", vid),
+			zap.Error(err))
+		utils.AbortWithError(c, utils.ErrStreamMissingFile, err)
 		return
 	}
 	defer file.Close()
-	contentType := header.Header.Get("Content-Type")
 
-	vid := c.Param("vid-id")
-	err = UploadToOSS(req.Context(), vid, file, contentType)
-	if err != nil {
-		utils.Logger.Error("Upload to OSS error", zap.Error(err))
-		c.String(http.StatusInternalServerError, "upload to OSS error")
+	contentType := header.Header.Get("Content-Type")
+	if err = UploadToOSS(req.Context(), vid, file, contentType); err != nil {
+		utils.Logger.Error("上传到OSS失败",
+			zap.String("trace_id", traceID),
+			zap.String("video_id", vid),
+			zap.String("content_type", contentType),
+			zap.Error(err))
+		utils.AbortWithError(c, utils.ErrStreamOSSUpload, err)
 		return
 	}
-	c.String(http.StatusOK, "Upload success")
+
+	utils.Logger.Info("上传视频到OSS成功",
+		zap.String("trace_id", traceID),
+		zap.String("video_id", vid))
+
+	c.JSON(http.StatusOK, gin.H{"message": "上传成功"})
 }
 
 func testPageHandler(c *gin.Context) {

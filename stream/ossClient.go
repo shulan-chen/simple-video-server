@@ -2,7 +2,6 @@ package stream
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"time"
 	"video-server/api/utils"
@@ -38,16 +37,21 @@ func UploadToOSS(ctx context.Context, fileName string, fileData io.Reader, conte
 
 	result, err := ossClient.PutObject(ctx, putRequest)
 	if err != nil {
-		utils.Logger.Error("Upload to OSS error", zap.Error(err))
+		utils.Logger.Error("上传到OSS失败",
+			zap.String("file", fileName),
+			zap.String("bucket", config.AppConfig.OssBucket),
+			zap.Error(err))
 		return err
 	}
-	fmt.Printf("Upload to OSS success: %s,%v\n", fileName, result.ETag)
+
+	utils.Logger.Info("上传到OSS成功",
+		zap.String("file", fileName),
+		zap.String("etag", *result.ETag))
 
 	return nil
 }
 
 func DeleteFromOSS(ctx context.Context, fileName string) error {
-
 	deleteRequest := &oss.DeleteObjectRequest{
 		Bucket: oss.Ptr(config.AppConfig.OssBucket),
 		Key:    oss.Ptr(OSS_VIDEO_DIR + fileName),
@@ -55,10 +59,15 @@ func DeleteFromOSS(ctx context.Context, fileName string) error {
 
 	_, err := ossClient.DeleteObject(ctx, deleteRequest)
 	if err != nil {
-		utils.Logger.Error("Delete from OSS error", zap.Error(err))
+		utils.Logger.Error("从OSS删除失败",
+			zap.String("file", fileName),
+			zap.String("bucket", config.AppConfig.OssBucket),
+			zap.Error(err))
 		return err
 	}
-	fmt.Printf("Delete from OSS success: %s\n", fileName)
+
+	utils.Logger.Info("从OSS删除成功",
+		zap.String("file", fileName))
 
 	return nil
 }

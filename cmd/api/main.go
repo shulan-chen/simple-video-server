@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"log"
 	"net/http"
 	"time"
 
@@ -12,6 +11,8 @@ import (
 	"video-server/internal/config"
 	"video-server/internal/health"
 	"video-server/internal/shutdown"
+
+	"go.uber.org/zap"
 )
 
 // 为什么要独立的main.go？
@@ -32,18 +33,22 @@ func main() {
 
 	// ========== 第2步：初始化日志 ==========
 	utils.InitLogging()
-	log.Printf("[%s] 服务启动中...", serviceName)
+	utils.Logger.Info("服务启动中", zap.String("service", serviceName))
 
 	// ========== 第3步：初始化依赖 ==========
 	// 初始化数据库连接
 	if err := dbops.Init(); err != nil {
-		log.Fatalf("[%s] 数据库初始化失败: %v", serviceName, err)
+		utils.Logger.Fatal("数据库初始化失败",
+			zap.String("service", serviceName),
+			zap.Error(err))
 	}
 
 	// 获取数据库实例（用于关闭）
 	sqlDB, err := dbops.Db.DB()
 	if err != nil {
-		log.Fatalf("[%s] 获取数据库实例失败: %v", serviceName, err)
+		utils.Logger.Fatal("获取数据库实例失败",
+			zap.String("service", serviceName),
+			zap.Error(err))
 	}
 
 	// ========== 第4步：创建HTTP服务器 ==========
@@ -68,9 +73,13 @@ func main() {
 
 	// ========== 第5步：启动服务器（非阻塞） ==========
 	go func() {
-		log.Printf("[%s] HTTP服务器启动在 %s", serviceName, addr)
+		utils.Logger.Info("HTTP服务器启动",
+			zap.String("service", serviceName),
+			zap.String("addr", addr))
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("[%s] 服务器启动失败: %v", serviceName, err)
+			utils.Logger.Fatal("服务器启动失败",
+				zap.String("service", serviceName),
+				zap.Error(err))
 		}
 	}()
 
@@ -79,7 +88,8 @@ func main() {
 
 	// 设置为就绪状态（开始接收流量）
 	healthChecker.SetReady()
-	log.Printf("[%s] 服务已就绪，开始接收请求", serviceName)
+	utils.Logger.Info("服务已就绪，开始接收请求",
+		zap.String("service", serviceName))
 
 	// ========== 第6步：优雅关闭 ==========
 	shutdownManager := shutdown.New(serviceName, 30*time.Second)
@@ -87,26 +97,30 @@ func main() {
 	// 注册关闭回调：先停止接收新请求
 	shutdownManager.Register(func(ctx context.Context) error {
 		healthChecker.SetNotReady()
-		log.Printf("[%s] 已标记为未就绪，停止接收新流量", serviceName)
+		utils.Logger.Info("已标记为未就绪，停止接收新流量",
+			zap.String("service", serviceName))
 		return nil
 	})
 
 	// 注册关闭回调：关闭HTTP服务器（等待现有请求处理完）
 	shutdownManager.Register(func(ctx context.Context) error {
-		log.Printf("[%s] 正在关闭HTTP服务器...", serviceName)
+		utils.Logger.Info("正在关闭HTTP服务器",
+			zap.String("service", serviceName))
 		return server.Shutdown(ctx)
 	})
 
 	// 注册关闭回调：关闭数据库连接
 	shutdownManager.Register(func(ctx context.Context) error {
-		log.Printf("[%s] 正在关闭数据库连接...", serviceName)
+		utils.Logger.Info("正在关闭数据库连接",
+			zap.String("service", serviceName))
 		return sqlDB.Close()
 	})
 
 	// 等待关闭信号（阻塞）
 	shutdownManager.Wait()
 
-	log.Printf("[%s] 服务已停止", serviceName)
+	utils.Logger.Info("服务已停止",
+		zap.String("service", serviceName))
 }
 
 // 对比旧版本的差异：

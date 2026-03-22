@@ -1,9 +1,11 @@
 package scheduler
 
 import (
-	"log"
 	"time"
+	"video-server/api/utils"
 	"video-server/internal/config"
+
+	"go.uber.org/zap"
 )
 
 type Worker struct {
@@ -29,7 +31,8 @@ func (w *Worker) StartWorker() {
 		case <-w.ticker.C:
 			go w.Runner.Start()
 		case <-w.done:
-			log.Println("[Worker] 收到停止信号，正在停止...")
+			utils.Logger.Info("Worker收到停止信号，正在停止",
+				zap.String("service", "scheduler"))
 			w.ticker.Stop()
 			return
 		}

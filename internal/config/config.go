@@ -2,7 +2,6 @@ package config
 
 import (
 	"fmt"
-	"log"
 	"os"
 
 	"github.com/spf13/viper"
@@ -69,7 +68,8 @@ func Load(configPath string) error {
 		return fmt.Errorf("解析配置失败: %w", err)
 	}
 
-	log.Printf("[Config] 配置加载成功: %s", configPath)
+	// 此处不使用logger，因为logger在config加载后才初始化
+	// 在main.go中使用zap记录配置加载成功
 	return nil
 }
 
@@ -78,6 +78,7 @@ func Load(configPath string) error {
 // 配置加载失败时，服务不应该继续运行（快速失败 > 默默运行错误配置）
 func MustLoad(configPath string) {
 	if err := Load(configPath); err != nil {
-		log.Fatalf("[Config] 配置加载失败: %v", err)
+		// 配置加载失败时，logger还未初始化，使用panic
+		panic(fmt.Sprintf("[Config] 配置加载失败: %v", err))
 	}
 }

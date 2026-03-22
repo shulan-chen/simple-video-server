@@ -1,6 +1,10 @@
 package scheduler
 
-import "fmt"
+import (
+	"video-server/api/utils"
+
+	"go.uber.org/zap"
+)
 
 type Runner struct {
 	Controller controlChannel
@@ -38,28 +42,25 @@ func (r *Runner) startDispatch() {
 		case c := <-r.Controller:
 			switch c {
 			case READY_TO_DISPATCH:
-				//fmt.Println("entered dispatch case")
 				err := r.Dispatcher(r.Data)
-				//fmt.Println("leave dispatch function")
 				if err != nil {
+					utils.Logger.Error("Dispatcher执行失败", zap.Error(err))
 					return
 				}
 				r.Controller <- READY_TO_EXECUTE
 			case READY_TO_EXECUTE:
-				//fmt.Println("entered execute case")
 				err := r.Executor(r.Data)
-				//fmt.Println("leave execute function")
 				if err != nil {
-					fmt.Println("execute function errored")
+					utils.Logger.Error("Executor执行失败", zap.Error(err))
 					return
 				}
 				r.Controller <- READY_TO_DISPATCH
 			}
 		case e := <-r.Error:
 			if e == CLOSE {
+				utils.Logger.Info("Runner收到关闭信号")
 				return
 			}
-		default:
 		}
 	}
 }

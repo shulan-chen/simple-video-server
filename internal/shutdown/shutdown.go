@@ -2,11 +2,13 @@ package shutdown
 
 import (
 	"context"
-	"log"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
+	"video-server/api/utils"
+
+	"go.uber.org/zap"
 )
 
 // 为什么需要优雅关闭？
@@ -45,7 +47,9 @@ func (g *GracefulShutdown) Wait() {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 
 	sig := <-quit
-	log.Printf("[%s] 收到关闭信号: %v, 开始优雅关闭...", g.serviceName, sig)
+	utils.Logger.Info("收到关闭信号，开始优雅关闭",
+		zap.String("service", g.serviceName),
+		zap.String("signal", sig.String()))
 
 	// 创建超时上下文
 	ctx, cancel := context.WithTimeout(context.Background(), g.timeout)
@@ -53,13 +57,21 @@ func (g *GracefulShutdown) Wait() {
 
 	// 依次执行关闭回调
 	for i, callback := range g.callbacks {
-		log.Printf("[%s] 执行关闭回调 %d/%d", g.serviceName, i+1, len(g.callbacks))
+		utils.Logger.Info("执行关闭回调",
+			zap.String("service", g.serviceName),
+			zap.Int("step", i+1),
+			zap.Int("total", len(g.callbacks)))
+
 		if err := callback(ctx); err != nil {
-			log.Printf("[%s] 关闭回调执行失败: %v", g.serviceName, err)
+			utils.Logger.Error("关闭回调执行失败",
+				zap.String("service", g.serviceName),
+				zap.Int("step", i+1),
+				zap.Error(err))
 		}
 	}
 
-	log.Printf("[%s] 优雅关闭完成", g.serviceName)
+	utils.Logger.Info("优雅关闭完成",
+		zap.String("service", g.serviceName))
 }
 
 // 典型的使用方式：

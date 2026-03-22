@@ -15,18 +15,24 @@ var (
 	accessTokenTTL = 15 * time.Minute
 	// Refresh Token 有效期：7天
 	refreshTokenTTL = 7 * 24 * time.Hour
-	// JWT签名密钥（从环境变量读取）
-	jwtSecret = getJWTSecret()
+	// JWT签名密钥（延迟初始化）
+	jwtSecret []byte
 )
 
 func getJWTSecret() []byte {
-	secret := os.Getenv("JWT_SECRET")
-	if secret == "" {
-		// 开发环境默认值
-		Logger.Warn("JWT_SECRET未设置，使用默认值（生产环境必须设置）")
-		secret = "dev-secret-key-change-in-production"
+	// 延迟初始化（第一次调用时才初始化）
+	if jwtSecret == nil {
+		secret := os.Getenv("JWT_SECRET")
+		if secret == "" {
+			// 开发环境默认值（只在Logger初始化后才记录日志）
+			if Logger != nil {
+				Logger.Warn("JWT_SECRET未设置，使用默认值（生产环境必须设置）")
+			}
+			secret = "dev-secret-key-change-in-production"
+		}
+		jwtSecret = []byte(secret)
 	}
-	return []byte(secret)
+	return jwtSecret
 }
 
 type Claims struct {
@@ -49,7 +55,7 @@ func GenerateAccessToken(username string, userId int) (string, error) {
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString(jwtSecret)
+	return token.SignedString(getJWTSecret())
 }
 
 // GenerateRefreshToken 生成 Refresh Token（随机字符串，需存储到Redis）
@@ -76,7 +82,7 @@ func ParseToken(tokenString string) (*Claims, error) {
 	claims := &Claims{}
 	token, err := jwt.ParseWithClaims(tokenString, claims,
 		func(token *jwt.Token) (interface{}, error) {
-			return jwtSecret, nil
+			return getJWTSecret(), nil
 		})
 
 	if err != nil {

@@ -2,13 +2,12 @@ package api
 
 import (
 	"database/sql"
-	"fmt"
 	"net/http"
 	"strconv"
 	"time"
+	"video-server/api/cache"
 	"video-server/api/dbops"
 	api "video-server/api/defs"
-	"video-server/api/session"
 	"video-server/api/utils"
 
 	"github.com/gin-gonic/gin"
@@ -16,162 +15,321 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+// CreateUser 用户注册
+// @Summary      用户注册
+// @Description  创建新用户账号
+// @Tags         用户管理
+// @Accept       json
+// @Produce      json
+// @Param        user  body      api.UserDTO  true  "用户信息"
+// @Success      201   {object}  map[string]string
+// @Failure      400   {object}  utils.AppError
+// @Failure      409   {object}  utils.AppError  "用户已存在"
+// @Failure      500   {object}  utils.AppError
+// @Router       /user [post]
 func CreateUser(c *gin.Context) {
+	traceID := c.GetString("trace_id")
 	loginUser := &api.UserDTO{}
 
-	err := c.ShouldBindJSON(loginUser)
-	if err != nil {
-		sendErrorResponse(c.Writer, api.ErrorRequestBodyParseFailed)
+	// 解析请求体
+	if err := c.ShouldBindJSON(loginUser); err != nil {
+		utils.Logger.Error("解析请求体失败",
+			zap.String("trace_id", traceID),
+			zap.Error(err))
+		utils.AbortWithError(c, utils.ErrAPIInvalidRequest, err)
 		return
 	}
+
+	// 检查用户是否已存在
 	exitedUser, err := dbops.GetUserByName(loginUser.Username)
 	if err == nil && exitedUser != nil {
-		sendErrorResponse(c.Writer, api.ErrorUserExisted)
+		utils.Logger.Warn("用户已存在",
+			zap.String("trace_id", traceID),
+			zap.String("username", loginUser.Username))
+		utils.AbortWithErrorMsg(c, utils.ErrAPIUserExisted, "")
 		return
 	}
+
+	// 加密密码
 	hashedPwd, err := bcrypt.GenerateFromPassword([]byte(loginUser.Password), 10)
 	if err != nil {
-		c.JSON(500, gin.H{"error": "加密失败"})
+		utils.Logger.Error("密码加密失败",
+			zap.String("trace_id", traceID),
+			zap.String("username", loginUser.Username),
+			zap.Error(err))
+		utils.AbortWithError(c, utils.ErrAPIEncryptFailed, err)
 		return
 	}
 
+	// 保存用户
 	_, err = dbops.AddUser(loginUser.Username, string(hashedPwd))
 	if err != nil {
-		utils.Logger.Error("AddUser failed", zap.Error(err))
-		sendErrorResponse(c.Writer, api.ErrorDBError)
+		utils.Logger.Error("保存用户失败",
+			zap.String("trace_id", traceID),
+			zap.String("username", loginUser.Username),
+			zap.Error(err))
+		utils.AbortWithError(c, utils.ErrAPIDBInsert, err)
 		return
 	}
-	sendNormalResponse(c.Writer, "register success", 201)
+
+	utils.Logger.Info("用户注册成功",
+		zap.String("trace_id", traceID),
+		zap.String("username", loginUser.Username))
+	c.JSON(http.StatusCreated, gin.H{"message": "注册成功"})
 }
 
+// Login 用户登录
+// @Summary      用户登录
+// @Description  用户登录获取Access Token和Refresh Token
+// @Tags         用户管理
+// @Accept       json
+// @Produce      json
+// @Param        user_name  path      string       true  "用户名"
+// @Param        user       body      api.UserDTO  true  "登录信息"
+// @Success      200        {object}  map[string]interface{}  "返回access_token、refresh_token等"
+// @Failure      400        {object}  utils.AppError
+// @Failure      401        {object}  utils.AppError  "用户不存在或密码错误"
+// @Failure      500        {object}  utils.AppError
+// @Router       /user/{user_name} [post]
 func Login(c *gin.Context) {
+	traceID := c.GetString("trace_id")
 	uname := c.Param("user_name")
 	loginUser := &api.UserDTO{}
 
-	err := c.ShouldBindJSON(loginUser)
-	if err != nil {
-		sendErrorResponse(c.Writer, api.ErrorRequestBodyParseFailed)
+	// 解析请求体
+	if err := c.ShouldBindJSON(loginUser); err != nil {
+		utils.Logger.Error("解析请求体失败",
+			zap.String("trace_id", traceID),
+			zap.String("username", uname),
+			zap.Error(err))
+		utils.AbortWithError(c, utils.ErrAPIInvalidRequest, err)
 		return
 	}
 	loginUser.Username = uname
-	//fmt.Println(*loginUser)
 
+	// 查询用户
 	pUser, err := dbops.GetUserByName(uname)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			sendErrorResponse(c.Writer, api.ErrorNotAuthUser)
+			utils.Logger.Warn("用户不存在",
+				zap.String("trace_id", traceID),
+				zap.String("username", uname))
+			utils.AbortWithErrorMsg(c, utils.ErrAPIUserNotFound, "")
 			return
 		}
-		sendErrorResponse(c.Writer, api.ErrorDBError)
-		return
-	}
-	if err := bcrypt.CompareHashAndPassword([]byte(pUser.Password), []byte(loginUser.Password)); err != nil {
-		sendErrorResponse(c.Writer, api.ErrorLoginPasswordWrong)
+		utils.Logger.Error("查询用户失败",
+			zap.String("trace_id", traceID),
+			zap.String("username", uname),
+			zap.Error(err))
+		utils.AbortWithError(c, utils.ErrAPIDBQuery, err)
 		return
 	}
 
-	// 生成 Access Token (15分钟)
+	// 验证密码
+	if err := bcrypt.CompareHashAndPassword([]byte(pUser.Password), []byte(loginUser.Password)); err != nil {
+		utils.Logger.Warn("密码错误",
+			zap.String("trace_id", traceID),
+			zap.String("username", uname))
+		utils.AbortWithErrorMsg(c, utils.ErrAPIPasswordWrong, "")
+		return
+	}
+
+	// 生成 Access Token
 	accessToken, err := utils.GenerateAccessToken(pUser.Username, pUser.Id)
 	if err != nil {
-		utils.Logger.Error("生成access token失败", zap.Error(err))
-		sendErrorResponse(c.Writer, api.ErrorInternalFaults)
+		utils.Logger.Error("生成access token失败",
+			zap.String("trace_id", traceID),
+			zap.String("username", uname),
+			zap.Int("user_id", pUser.Id),
+			zap.Error(err))
+		utils.AbortWithError(c, utils.ErrAPITokenGenerate, err)
 		return
 	}
 
-	// 生成 Refresh Token (7天)
+	// 生成 Refresh Token
 	refreshToken, err := utils.GenerateRefreshToken()
 	if err != nil {
-		utils.Logger.Error("生成refresh token失败", zap.Error(err))
-		sendErrorResponse(c.Writer, api.ErrorInternalFaults)
+		utils.Logger.Error("生成refresh token失败",
+			zap.String("trace_id", traceID),
+			zap.String("username", uname),
+			zap.Int("user_id", pUser.Id),
+			zap.Error(err))
+		utils.AbortWithError(c, utils.ErrAPITokenGenerate, err)
 		return
 	}
 
-	// 将 Refresh Token 存入 Redis
-	if err := session.SaveRefreshToken(refreshToken, pUser.Id); err != nil {
-		utils.Logger.Error("保存refresh token失败", zap.Error(err))
-		sendErrorResponse(c.Writer, api.ErrorInternalFaults)
+	// 保存 Refresh Token 到 Redis
+	if err := cache.SaveRefreshToken(c.Request.Context(), refreshToken, pUser.Id); err != nil {
+		utils.Logger.Error("保存refresh token失败",
+			zap.String("trace_id", traceID),
+			zap.String("username", uname),
+			zap.Int("user_id", pUser.Id),
+			zap.Error(err))
+		utils.AbortWithError(c, utils.ErrAPIRedisOperation, err)
 		return
 	}
 
-	// 返回双token
+	utils.Logger.Info("用户登录成功",
+		zap.String("trace_id", traceID),
+		zap.String("username", uname),
+		zap.Int("user_id", pUser.Id),
+		zap.String("ip", c.ClientIP()))
+
 	c.JSON(http.StatusOK, gin.H{
 		"access_token":  accessToken,
 		"refresh_token": refreshToken,
-		"expires_in":    utils.GetAccessTokenTTL(), // 秒
+		"expires_in":    utils.GetAccessTokenTTL(),
 		"token_type":    "Bearer",
 	})
 }
 
+// Logout 用户登出
+// @Summary      用户登出
+// @Description  删除Refresh Token，使用户退出登录
+// @Tags         用户管理
+// @Accept       json
+// @Produce      json
+// @Param        user_name      path      string  true  "用户名"
+// @Param        refresh_token  body      object  true  "Refresh Token"  example({"refresh_token": "xxx"})
+// @Success      200            {object}  map[string]string
+// @Failure      400            {object}  utils.AppError
+// @Security     Bearer
+// @Router       /user/{user_name}/logout [post]
 func Logout(c *gin.Context) {
-	// 从请求体中获取 refresh_token
+	traceID := c.GetString("trace_id")
+	userName := c.GetString("user_name")
+	userID := c.GetString("user_id")
+
 	var req struct {
 		RefreshToken string `json:"refresh_token" binding:"required"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		sendErrorResponse(c.Writer, api.ErrorRequestBodyParseFailed)
+		utils.Logger.Error("解析请求体失败",
+			zap.String("trace_id", traceID),
+			zap.String("user_name", userName),
+			zap.Error(err))
+		utils.AbortWithError(c, utils.ErrAPIInvalidRequest, err)
 		return
 	}
 
-	// 从Redis删除 Refresh Token
-	if err := session.DeleteRefreshToken(req.RefreshToken); err != nil {
-		utils.Logger.Error("删除refresh token失败", zap.Error(err))
-		// 即使删除失败也返回成功（可能token已经不存在）
+	// 删除 Refresh Token
+	if err := cache.DeleteRefreshToken(c.Request.Context(), req.RefreshToken); err != nil {
+		utils.Logger.Error("删除refresh token失败",
+			zap.String("trace_id", traceID),
+			zap.String("user_name", userName),
+			zap.String("user_id", userID),
+			zap.Error(err))
+		// 即使失败也继续（token可能已不存在）
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"message": "logout success",
-	})
+	utils.Logger.Info("用户登出成功",
+		zap.String("trace_id", traceID),
+		zap.String("user_name", userName),
+		zap.String("user_id", userID))
+
+	c.JSON(http.StatusOK, gin.H{"message": "登出成功"})
 }
 
-// RefreshToken 刷新 Access Token
+// RefreshToken 刷新Access Token
+// @Summary      刷新Token
+// @Description  使用Refresh Token获取新的Access Token
+// @Tags         认证
+// @Accept       json
+// @Produce      json
+// @Param        refresh_token  body      object  true  "Refresh Token"  example({"refresh_token": "xxx"})
+// @Success      200            {object}  map[string]interface{}
+// @Failure      400            {object}  utils.AppError
+// @Failure      401            {object}  utils.AppError  "Refresh Token无效"
+// @Router       /auth/refresh [post]
 func RefreshToken(c *gin.Context) {
+	traceID := c.GetString("trace_id")
+
 	var req struct {
 		RefreshToken string `json:"refresh_token" binding:"required"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "refresh_token is required"})
+		utils.Logger.Error("解析请求体失败",
+			zap.String("trace_id", traceID),
+			zap.Error(err))
+		utils.AbortWithError(c, utils.ErrAPIInvalidRequest, err)
 		return
 	}
 
 	// 验证 Refresh Token
-	userId, err := session.ValidateRefreshToken(req.RefreshToken)
+	userId, err := cache.ValidateRefreshToken(c.Request.Context(), req.RefreshToken)
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid or expired refresh token"})
+		utils.Logger.Warn("Refresh token无效或已过期",
+			zap.String("trace_id", traceID),
+			zap.Error(err))
+		utils.AbortWithError(c, utils.ErrAPIRefreshTokenInvalid, err)
 		return
 	}
 
-	// 从数据库获取用户信息
-	user, err := dbops.GetUserById(userId)
-	if err != nil {
-		utils.Logger.Error("获取用户信息失败", zap.Error(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "user not found"})
-		return
+	// 1. 先查缓存（根据userId）
+	user, err := cache.GetUserById(c.Request.Context(), userId)
+	if err == nil {
+		utils.Logger.Debug("用户信息缓存命中",
+			zap.String("trace_id", traceID),
+			zap.Int("user_id", userId))
+	} else {
+		// 2. 缓存未命中，查数据库
+		user, err = dbops.GetUserById(userId)
+		if err != nil {
+			utils.Logger.Error("获取用户信息失败",
+				zap.String("trace_id", traceID),
+				zap.Int("user_id", userId),
+				zap.Error(err))
+			utils.AbortWithError(c, utils.ErrAPIDBQuery, err)
+			return
+		}
+
+		// 3. 写入缓存
+		if err := cache.SetUser(c.Request.Context(), user); err != nil {
+			utils.Logger.Warn("写入用户缓存失败",
+				zap.String("trace_id", traceID),
+				zap.Int("user_id", userId),
+				zap.Error(err))
+		}
 	}
 
 	// 生成新的 Access Token
 	newAccessToken, err := utils.GenerateAccessToken(user.Username, userId)
 	if err != nil {
-		utils.Logger.Error("生成新access token失败", zap.Error(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate token"})
+		utils.Logger.Error("生成新access token失败",
+			zap.String("trace_id", traceID),
+			zap.String("username", user.Username),
+			zap.Int("user_id", userId),
+			zap.Error(err))
+		utils.AbortWithError(c, utils.ErrAPITokenGenerate, err)
 		return
 	}
 
-	// (可选) Refresh Token 轮换：生成新的 Refresh Token
+	// Refresh Token 轮换
 	newRefreshToken, err := utils.GenerateRefreshToken()
 	if err != nil {
-		utils.Logger.Error("生成新refresh token失败", zap.Error(err))
-		// 不影响主流程，继续使用旧的 refresh token
+		utils.Logger.Error("生成新refresh token失败",
+			zap.String("trace_id", traceID),
+			zap.String("username", user.Username),
+			zap.Int("user_id", userId),
+			zap.Error(err))
 		newRefreshToken = req.RefreshToken
 	} else {
-		// 轮换：删除旧的，保存新的
-		if err := session.RotateRefreshToken(req.RefreshToken, newRefreshToken, userId); err != nil {
-			utils.Logger.Error("轮换refresh token失败", zap.Error(err))
-			// 失败时仍使用旧token
+		if err := cache.RotateRefreshToken(c.Request.Context(), req.RefreshToken, newRefreshToken, userId); err != nil {
+			utils.Logger.Error("轮换refresh token失败",
+				zap.String("trace_id", traceID),
+				zap.String("username", user.Username),
+				zap.Int("user_id", userId),
+				zap.Error(err))
 			newRefreshToken = req.RefreshToken
 		}
 	}
+
+	utils.Logger.Info("刷新token成功",
+		zap.String("trace_id", traceID),
+		zap.String("username", user.Username),
+		zap.Int("user_id", userId))
 
 	c.JSON(http.StatusOK, gin.H{
 		"access_token":  newAccessToken,
@@ -181,138 +339,416 @@ func RefreshToken(c *gin.Context) {
 	})
 }
 
+// GetUserInfo 获取用户信息
+// @Summary      获取用户信息
+// @Description  根据用户名获取用户详细信息
+// @Tags         用户管理
+// @Accept       json
+// @Produce      json
+// @Param        user_name  path      string  true  "用户名"
+// @Success      200        {object}  api.User
+// @Failure      404        {object}  utils.AppError  "用户不存在"
+// @Failure      500        {object}  utils.AppError
+// @Security     Bearer
+// @Router       /user/{user_name} [get]
 func GetUserInfo(c *gin.Context) {
+	traceID := c.GetString("trace_id")
+	userName := c.Param("user_name")
+
 	if !ValidateUser(c.Writer, c.Request) {
 		return
 	}
-	user, err := dbops.GetUserByName(c.Param("user_name"))
+
+	// GetUserInfo接口按username查询，不适合缓存（因为key是userId）
+	// 如果要缓存需要建立username->userId映射，增加复杂度
+	// 此接口不是高频调用，直接查数据库
+	user, err := dbops.GetUserByName(userName)
 	if err != nil {
-		utils.Logger.Error("GetUserByName failed", zap.Error(err))
-		sendErrorResponse(c.Writer, api.ErrorDBError)
+		if err == sql.ErrNoRows {
+			utils.Logger.Warn("用户不存在",
+				zap.String("trace_id", traceID),
+				zap.String("username", userName))
+			utils.AbortWithErrorMsg(c, utils.ErrAPIUserNotFound, "")
+			return
+		}
+		utils.Logger.Error("查询用户失败",
+			zap.String("trace_id", traceID),
+			zap.String("username", userName),
+			zap.Error(err))
+		utils.AbortWithError(c, utils.ErrAPIDBQuery, err)
 		return
 	}
+
 	c.JSON(http.StatusOK, user)
 }
 
+// AddNewVideo 添加视频元数据
+// @Summary      添加视频
+// @Description  创建视频元数据记录（上传视频文件后调用）
+// @Tags         视频管理
+// @Accept       json
+// @Produce      json
+// @Param        user_name  path      string                    true  "用户名"
+// @Param        video      body      api.UserAddNewVideoDTO    true  "视频信息"
+// @Success      200        {object}  api.VideoInfo
+// @Failure      400        {object}  utils.AppError
+// @Failure      500        {object}  utils.AppError
+// @Security     Bearer
+// @Router       /user/{user_name}/videos [post]
 func AddNewVideo(c *gin.Context) {
+	traceID := c.GetString("trace_id")
+	userID := c.GetString("user_id")
+	userName := c.GetString("user_name")
+
 	if !ValidateUser(c.Writer, c.Request) {
 		return
 	}
+
 	userNewVideoDTO := &api.UserAddNewVideoDTO{}
-	err := c.ShouldBindJSON(userNewVideoDTO)
-	if err != nil {
-		sendErrorResponse(c.Writer, api.ErrorRequestBodyParseFailed)
+	if err := c.ShouldBindJSON(userNewVideoDTO); err != nil {
+		utils.Logger.Error("解析请求体失败",
+			zap.String("trace_id", traceID),
+			zap.String("user_id", userID),
+			zap.Error(err))
+		utils.AbortWithError(c, utils.ErrAPIInvalidRequest, err)
 		return
 	}
+
 	videoInfo, err := dbops.AddNewVideo(userNewVideoDTO.AuthorId, userNewVideoDTO.Name)
 	if err != nil {
-		utils.Logger.Error("AddNewVideo failed", zap.Error(err))
-		sendErrorResponse(c.Writer, api.ErrorDBError)
+		utils.Logger.Error("添加视频失败",
+			zap.String("trace_id", traceID),
+			zap.String("user_name", userName),
+			zap.String("video_name", userNewVideoDTO.Name),
+			zap.Error(err))
+		utils.AbortWithError(c, utils.ErrAPIDBInsert, err)
 		return
 	}
+
+	// 使相关缓存失效
+	ctx := c.Request.Context()
+	cache.InvalidateAllVideos(ctx)                             // 全部视频列表
+	cache.InvalidateUserVideos(ctx, userNewVideoDTO.AuthorId)  // 用户视频列表
+
+	utils.Logger.Info("添加视频成功",
+		zap.String("trace_id", traceID),
+		zap.String("user_name", userName),
+		zap.String("video_id", videoInfo.Vid),
+		zap.String("video_name", videoInfo.Name))
+
 	c.JSON(http.StatusOK, videoInfo)
 }
 
+// ListUserAllVideos 获取用户视频列表
+// @Summary      获取用户视频列表
+// @Description  获取指定用户的所有视频
+// @Tags         视频管理
+// @Accept       json
+// @Produce      json
+// @Param        user_name  path      string  true  "用户名"
+// @Success      200        {object}  api.VideoInfoDTO
+// @Failure      401        {object}  utils.AppError
+// @Failure      500        {object}  utils.AppError
+// @Security     Bearer
+// @Router       /user/{user_name}/videos [get]
 func ListUserAllVideos(c *gin.Context) {
+	traceID := c.GetString("trace_id")
+	userName := c.GetString("user_name")
+
 	if !ValidateUser(c.Writer, c.Request) {
 		return
 	}
+
 	uid := c.Request.Header.Get(HEADER_FILED_UID)
 	uidInt, _ := strconv.Atoi(uid)
-	fmt.Printf("ListUserAllVideos, uid %d\n", uidInt)
-	videoInfos, err := dbops.GetUserAllVideos(uidInt)
-	if err != nil {
-		utils.Logger.Error("GetUserAllVideos failed", zap.Error(err))
-		sendErrorResponse(c.Writer, api.ErrorDBError)
+
+	// 1. 先查缓存
+	videoInfos, err := cache.GetUserVideos(c.Request.Context(), uidInt)
+	if err == nil {
+		utils.Logger.Debug("用户视频列表缓存命中",
+			zap.String("trace_id", traceID),
+			zap.String("user_name", userName),
+			zap.Int("user_id", uidInt))
+		videoInfoDTO := &api.VideoInfoDTO{Videos: videoInfos}
+		c.JSON(http.StatusOK, videoInfoDTO)
 		return
 	}
-	videoInfoDTO := &api.VideoInfoDTO{}
-	videoInfoDTO.Videos = videoInfos
+
+	// 2. 缓存未命中，查数据库
+	videoInfos, err = dbops.GetUserAllVideos(uidInt)
+	if err != nil {
+		utils.Logger.Error("查询用户视频列表失败",
+			zap.String("trace_id", traceID),
+			zap.String("user_name", userName),
+			zap.Int("user_id", uidInt),
+			zap.Error(err))
+		utils.AbortWithError(c, utils.ErrAPIDBQuery, err)
+		return
+	}
+
+	// 3. 写入缓存
+	if err := cache.SetUserVideos(c.Request.Context(), uidInt, videoInfos); err != nil {
+		utils.Logger.Warn("写入用户视频列表缓存失败",
+			zap.String("trace_id", traceID),
+			zap.Int("user_id", uidInt),
+			zap.Error(err))
+	}
+
+	videoInfoDTO := &api.VideoInfoDTO{Videos: videoInfos}
 	c.JSON(http.StatusOK, videoInfoDTO)
 }
 
+// ListAllVideos 获取所有视频列表
+// @Summary      获取所有视频
+// @Description  获取系统中所有视频列表（热门接口）
+// @Tags         视频管理
+// @Accept       json
+// @Produce      json
+// @Success      200  {object}  api.VideoInfoDTO
+// @Failure      401  {object}  utils.AppError
+// @Failure      500  {object}  utils.AppError
+// @Security     Bearer
+// @Router       /videos [get]
 func ListAllVideos(c *gin.Context) {
+	traceID := c.GetString("trace_id")
+
 	if !ValidateUser(c.Writer, c.Request) {
 		return
 	}
-	videoInfos, err := dbops.GetAllVideoInfo()
-	if err != nil {
-		utils.Logger.Error("ListAllVideos failed", zap.Error(err))
-		sendErrorResponse(c.Writer, api.ErrorDBError)
+
+	// 1. 先查缓存（热门数据）
+	videoInfos, err := cache.GetAllVideos(c.Request.Context())
+	if err == nil {
+		utils.Logger.Debug("全部视频列表缓存命中",
+			zap.String("trace_id", traceID))
+		videoInfoDTO := &api.VideoInfoDTO{Videos: videoInfos}
+		c.JSON(http.StatusOK, videoInfoDTO)
 		return
 	}
-	videoInfoDTO := &api.VideoInfoDTO{}
-	videoInfoDTO.Videos = videoInfos
+
+	// 2. 缓存未命中，查数据库
+	videoInfos, err = dbops.GetAllVideoInfo()
+	if err != nil {
+		utils.Logger.Error("查询所有视频失败",
+			zap.String("trace_id", traceID),
+			zap.Error(err))
+		utils.AbortWithError(c, utils.ErrAPIDBQuery, err)
+		return
+	}
+
+	// 3. 写入缓存
+	if err := cache.SetAllVideos(c.Request.Context(), videoInfos); err != nil {
+		utils.Logger.Warn("写入全部视频列表缓存失败",
+			zap.String("trace_id", traceID),
+			zap.Error(err))
+	}
+
+	videoInfoDTO := &api.VideoInfoDTO{Videos: videoInfos}
 	c.JSON(http.StatusOK, videoInfoDTO)
 }
 
+// DeleteVideoInfo 删除视频
+// @Summary      删除视频
+// @Description  软删除视频（异步删除OSS文件）
+// @Tags         视频管理
+// @Accept       json
+// @Produce      json
+// @Param        user_name  path      string  true  "用户名"
+// @Param        vid        path      string  true  "视频ID"
+// @Success      200        {object}  map[string]string
+// @Failure      403        {object}  utils.AppError  "无权删除该视频"
+// @Failure      404        {object}  utils.AppError  "视频不存在"
+// @Failure      500        {object}  utils.AppError
+// @Security     Bearer
+// @Router       /user/{user_name}/videos/{vid} [delete]
 func DeleteVideoInfo(c *gin.Context) {
+	traceID := c.GetString("trace_id")
+	userName := c.GetString("user_name")
+
 	if !ValidateUser(c.Writer, c.Request) {
 		return
 	}
+
 	uid := c.Request.Header.Get(HEADER_FILED_UID)
 	uidInt, _ := strconv.Atoi(uid)
 	vid := c.Param("vid")
+
+	// 检查视频是否存在
 	existedVideo, err := dbops.GetVideoInfo(vid)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			sendErrorResponse(c.Writer, api.ErrorVideoNotExisted)
+			utils.Logger.Warn("视频不存在",
+				zap.String("trace_id", traceID),
+				zap.String("user_name", userName),
+				zap.String("video_id", vid))
+			utils.AbortWithErrorMsg(c, utils.ErrAPIVideoNotExisted, "")
 			return
 		}
-	}
-	if existedVideo.AuthorId != uidInt {
-		sendErrorResponse(c.Writer, api.ErrorVideoNotMatchToUser)
-		return
-	}
-	err = dbops.DeleteVideoInfo(vid)
-	if err != nil {
-		utils.Logger.Error("DeleteVideoInfo failed", zap.Error(err))
-		sendErrorResponse(c.Writer, api.ErrorDBError)
+		utils.Logger.Error("查询视频失败",
+			zap.String("trace_id", traceID),
+			zap.String("user_name", userName),
+			zap.String("video_id", vid),
+			zap.Error(err))
+		utils.AbortWithError(c, utils.ErrAPIDBQuery, err)
 		return
 	}
 
-	err = dbops.InsertNewVideoDeletionRecord(vid)
-	if err != nil {
-		sendErrorResponse(c.Writer, api.ErrorInternalFaults)
+	// 检查权限
+	if existedVideo.AuthorId != uidInt {
+		utils.Logger.Warn("无权删除该视频",
+			zap.String("trace_id", traceID),
+			zap.String("user_name", userName),
+			zap.Int("user_id", uidInt),
+			zap.String("video_id", vid),
+			zap.Int("video_author_id", existedVideo.AuthorId))
+		utils.AbortWithErrorMsg(c, utils.ErrAPIVideoNotBelongToUser, "")
 		return
 	}
-	sendNormalResponse(c.Writer, "ok", 200)
+
+	// 软删除视频
+	if err = dbops.DeleteVideoInfo(vid); err != nil {
+		utils.Logger.Error("删除视频失败",
+			zap.String("trace_id", traceID),
+			zap.String("user_name", userName),
+			zap.String("video_id", vid),
+			zap.Error(err))
+		utils.AbortWithError(c, utils.ErrAPIDBDelete, err)
+		return
+	}
+
+	// 添加到删除记录（用于scheduler异步删除OSS文件）
+	if err = dbops.InsertNewVideoDeletionRecord(vid); err != nil {
+		utils.Logger.Error("添加删除记录失败",
+			zap.String("trace_id", traceID),
+			zap.String("user_name", userName),
+			zap.String("video_id", vid),
+			zap.Error(err))
+		utils.AbortWithError(c, utils.ErrAPIDBInsert, err)
+		return
+	}
+
+	// 使相关缓存失效
+	ctx := c.Request.Context()
+	cache.InvalidateAllVideos(ctx)              // 全部视频列表
+	cache.InvalidateUserVideos(ctx, uidInt)     // 用户视频列表
+	cache.DeleteVideo(ctx, vid)                 // 视频详情
+	cache.InvalidateComments(ctx, vid)          // 视频评论
+
+	utils.Logger.Info("删除视频成功",
+		zap.String("trace_id", traceID),
+		zap.String("user_name", userName),
+		zap.String("video_id", vid))
+
+	c.JSON(http.StatusOK, gin.H{"message": "删除成功"})
 }
 
+// PostComments 发表评论
+// @Summary      发表评论
+// @Description  在视频下发表评论
+// @Tags         评论管理
+// @Accept       json
+// @Produce      json
+// @Param        vid      path      string                true  "视频ID"
+// @Param        comment  body      api.PostCommentsDTO   true  "评论内容"
+// @Success      201      {object}  map[string]string
+// @Failure      400      {object}  utils.AppError
+// @Failure      429      {object}  utils.AppError  "评论过于频繁"
+// @Failure      500      {object}  utils.AppError
+// @Security     Bearer
+// @Router       /videos/{vid}/comments [post]
 func PostComments(c *gin.Context) {
+	traceID := c.GetString("trace_id")
+	userName := c.GetString("user_name")
+
 	if !ValidateUser(c.Writer, c.Request) {
 		return
 	}
+
 	vid := c.Param("vid")
 	userComment := &api.PostCommentsDTO{}
-	err := c.ShouldBindJSON(userComment)
-	if err != nil {
-		utils.Logger.Error("PostComments failed", zap.Error(err))
-		sendErrorResponse(c.Writer, api.ErrorRequestBodyParseFailed)
+
+	if err := c.ShouldBindJSON(userComment); err != nil {
+		utils.Logger.Error("解析请求体失败",
+			zap.String("trace_id", traceID),
+			zap.String("user_name", userName),
+			zap.String("video_id", vid),
+			zap.Error(err))
+		utils.AbortWithError(c, utils.ErrAPIInvalidRequest, err)
 		return
 	}
-	err = dbops.InsertNewComments(vid, userComment.AuthorId, userComment.Content)
-	if err != nil {
-		utils.Logger.Error("InsertNewComments failed", zap.Error(err))
-		sendErrorResponse(c.Writer, api.ErrorDBError)
+
+	if err := dbops.InsertNewComments(vid, userComment.AuthorId, userComment.Content); err != nil {
+		utils.Logger.Error("添加评论失败",
+			zap.String("trace_id", traceID),
+			zap.String("user_name", userName),
+			zap.String("video_id", vid),
+			zap.Error(err))
+		utils.AbortWithError(c, utils.ErrAPIDBInsert, err)
 		return
 	}
-	sendNormalResponse(c.Writer, "ok", 201)
+
+	// 使评论列表缓存失效
+	cache.InvalidateComments(c.Request.Context(), vid)
+
+	utils.Logger.Info("添加评论成功",
+		zap.String("trace_id", traceID),
+		zap.String("user_name", userName),
+		zap.String("video_id", vid))
+
+	c.JSON(http.StatusCreated, gin.H{"message": "评论成功"})
 }
 
+// ListComments 获取评论列表
+// @Summary      获取评论列表
+// @Description  获取视频的所有评论
+// @Tags         评论管理
+// @Accept       json
+// @Produce      json
+// @Param        vid  path      string  true  "视频ID"
+// @Success      200  {object}  api.CommentsDTO
+// @Failure      401  {object}  utils.AppError
+// @Failure      500  {object}  utils.AppError
+// @Security     Bearer
+// @Router       /videos/{vid}/comments [get]
 func ListComments(c *gin.Context) {
+	traceID := c.GetString("trace_id")
+
 	if !ValidateUser(c.Writer, c.Request) {
 		return
 	}
+
 	vid := c.Param("vid")
 
-	comments, err := dbops.ListComments(vid, time.Unix(0, 0), time.Now())
-	if err != nil {
-		utils.Logger.Error("ListComments failed", zap.Error(err))
-		sendErrorResponse(c.Writer, api.ErrorDBError)
+	// 1. 先查缓存
+	comments, err := cache.GetComments(c.Request.Context(), vid)
+	if err == nil {
+		utils.Logger.Debug("评论列表缓存命中",
+			zap.String("trace_id", traceID),
+			zap.String("video_id", vid))
+		commentsDTO := &api.CommentsDTO{Comments: comments}
+		c.JSON(http.StatusOK, commentsDTO)
 		return
 	}
-	commentsDTO := &api.CommentsDTO{}
-	commentsDTO.Comments = comments
+
+	// 2. 缓存未命中，查数据库
+	comments, err = dbops.ListComments(vid, time.Unix(0, 0), time.Now())
+	if err != nil {
+		utils.Logger.Error("查询评论列表失败",
+			zap.String("trace_id", traceID),
+			zap.String("video_id", vid),
+			zap.Error(err))
+		utils.AbortWithError(c, utils.ErrAPIDBQuery, err)
+		return
+	}
+
+	// 3. 写入缓存
+	if err := cache.SetComments(c.Request.Context(), vid, comments); err != nil {
+		utils.Logger.Warn("写入评论列表缓存失败",
+			zap.String("trace_id", traceID),
+			zap.String("video_id", vid),
+			zap.Error(err))
+	}
+
+	commentsDTO := &api.CommentsDTO{Comments: comments}
 	c.JSON(http.StatusOK, commentsDTO)
 }

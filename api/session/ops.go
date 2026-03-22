@@ -1,9 +1,16 @@
 package session
 
+// ⚠️ 此文件已废弃
+// 新的session管理使用 JWT + Refresh Token 方式
+// 所有Redis缓存操作已迁移到 api/cache/ 目录
+// 保留此文件仅为了兼容性，未来版本将删除
+
 import (
+	"context"
 	"strconv"
 	"sync"
 	"time"
+	"video-server/api/cache"
 	api "video-server/api/defs"
 	"video-server/api/utils"
 
@@ -13,11 +20,11 @@ import (
 var ttl = time.Duration(30 * time.Minute)
 var sessionMap *sync.Map
 var sessionKey = "user_sessions"
+var ctx = context.Background()
 
 func init() {
-	initRedis()
 	sessionMap = &sync.Map{}
-	LoadSessions()
+	// 不再主动加载sessions，因为已经使用JWT方式
 }
 
 func getAllKeys(m *sync.Map) []string {
@@ -35,51 +42,49 @@ func AddNewSession(userId int, userName string) (api.SimpleSession, error) {
 	expireStr := strconv.FormatInt(expire, 10)
 	session := api.SimpleSession{SessionId: sid, UserId: userId, Username: userName, TTL: expireStr}
 	sessionMap.Store(sid, session)
-	err := AddSessionToRedis(sid, session)
+
+	err := cache.AddSession(ctx, sid, &session)
 	if err != nil {
-		utils.Logger.Error("AddSessionToRedis failed", zap.Error(err))
+		utils.Logger.Error("添加Session到Redis失败", zap.Error(err))
 		return session, err
 	}
 
-	UpdateSessions(sessionKey, getAllKeys(sessionMap))
+	// 更新session列表（已不再需要，保留兼容）
 	return session, nil
 }
 
 func LoadSessions() {
-	sessions, err := LoadSessionsFromRedis(sessionKey)
-	if err != nil {
-		panic(err)
-	}
-	for _, s := range sessions {
-		sessionMap.Store(s.SessionId, s)
-	}
+	// 已废弃，不再需要加载sessions
+	// 使用JWT方式，无需预加载
 }
 
 func IsSessionExpired(sid string) (userName string, ok bool) {
 	session, ok := sessionMap.Load(sid)
 	if !ok {
-		//本地cache没有还要去redis搂，防止分布式不一致的情况
-		existSession, err := GetSessionFromRedis(sid)
+		// 本地cache没有，查Redis
+		existSession, err := cache.GetSession(ctx, sid)
 		if err != nil || existSession.SessionId == "" {
 			return "", true
 		}
 		sessionMap.Store(existSession.SessionId, existSession)
 		return existSession.Username, false
 	}
+
 	s := session.(api.SimpleSession)
 	ttlInt64, err := strconv.ParseInt(s.TTL, 10, 64)
 	if err != nil {
 		return s.Username, true
 	}
+
 	if ttlInt64 < time.Now().Unix() {
 		DeleteSession(sid)
 		return s.Username, true
 	}
+
 	return s.Username, false
 }
 
 func DeleteSession(sid string) {
 	sessionMap.Delete(sid)
-	DeleteSessionFromRedis(sid)
-	UpdateSessions(sessionKey, getAllKeys(sessionMap))
+	cache.DeleteSession(ctx, sid)
 }

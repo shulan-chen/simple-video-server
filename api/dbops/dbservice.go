@@ -54,8 +54,8 @@ func DeleteUser(id int, userName string) error {
 	if pUser == nil || err == sql.ErrNoRows {
 		return fmt.Errorf("user not exist")
 	}
-	// Unscoped() 表示物理删除。如果不加，且模型有 DeletedAt 字段，则会软删除
-	// 这里的写法等同于 DELETE FROM users WHERE id=@id AND name=@userName
+	// 软删除：只设置 deleted_at 字段，不实际删除记录
+	// 如果需要物理删除，使用 Db.Unscoped().Delete()
 	result := Db.Where("id = @id AND name = @userName",
 		sql.Named("id", id),
 		sql.Named("userName", userName)).Delete(&api.User{})
@@ -136,11 +136,15 @@ func ListComments(vid string, from, to time.Time) ([]*api.CommentDTO, error) {
 	var comments []*api.CommentDTO
 	// GORM 的 Raw SQL 查询映射到非 Model 结构体 (DTO)
 	// 这种场景通常用 Raw() + Scan()
+	// 注意：Raw SQL需要手动排除软删除的记录
 	err := Db.Raw(`
         SELECT users.name as author_name, comments.comment_id, comments.content, comments.create_time
         FROM comments
         INNER JOIN users ON comments.author_id = users.id
-        WHERE comments.video_id = @vid AND comments.create_time BETWEEN @from AND @to`,
+        WHERE comments.video_id = @vid
+          AND comments.create_time BETWEEN @from AND @to
+          AND comments.deleted_at IS NULL
+          AND users.deleted_at IS NULL`,
 		sql.Named("vid", vid),
 		sql.Named("from", from),
 		sql.Named("to", to)).Scan(&comments).Error
@@ -185,7 +189,8 @@ func LoadOneSessionFromDB(sid string) (*api.SimpleSession, error) {
 }
 
 func DeleteSessionFromDB(sid string) error {
-	result := Db.Where("session_id = @sid", sql.Named("sid", sid)).Delete(&api.SimpleSession{})
+	// Session表不需要软删除，直接物理删除
+	result := Db.Unscoped().Where("session_id = @sid", sql.Named("sid", sid)).Delete(&api.SimpleSession{})
 	return result.Error
 }
 
@@ -210,6 +215,7 @@ func ReadVideoDeletionRecord(count int) ([]string, error) {
 }
 
 func DeleteVideoDeletionRecord(vid string) error {
-	result := Db.Where("vid = @vid", sql.Named("vid", vid)).Delete(&api.VideoDeletionRecord{})
+	// 删除记录表不需要软删除，直接物理删除
+	result := Db.Unscoped().Where("vid = @vid", sql.Named("vid", vid)).Delete(&api.VideoDeletionRecord{})
 	return result.Error
 }

@@ -1,0 +1,5 @@
+DROP TABLE IF EXISTS video_delete_record;
+DROP TABLE IF EXISTS sessions;
+DROP TABLE IF EXISTS comments;
+DROP TABLE IF EXISTS video_info;
+DROP TABLE IF EXISTS users;

@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"log"
 	"net/http"
 	"time"
 
@@ -14,6 +13,7 @@ import (
 	"video-server/scheduler"
 
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 )
 
 // Scheduler服务的特殊之处：
@@ -31,18 +31,22 @@ func main() {
 
 	// ========== 第2步：初始化日志 ==========
 	utils.InitLogging()
-	log.Printf("[%s] 服务启动中...", serviceName)
+	utils.Logger.Info("服务启动中", zap.String("service", serviceName))
 
 	// ========== 第3步：初始化依赖 ==========
 	// 初始化数据库连接
 	if err := dbops.Init(); err != nil {
-		log.Fatalf("[%s] 数据库初始化失败: %v", serviceName, err)
+		utils.Logger.Fatal("数据库初始化失败",
+			zap.String("service", serviceName),
+			zap.Error(err))
 	}
 
 	// 获取数据库实例（用于关闭）
 	sqlDB, err := dbops.Db.DB()
 	if err != nil {
-		log.Fatalf("[%s] 获取数据库实例失败: %v", serviceName, err)
+		utils.Logger.Fatal("获取数据库实例失败",
+			zap.String("service", serviceName),
+			zap.Error(err))
 	}
 
 	// ========== 第4步：启动定时任务 ==========
@@ -51,7 +55,9 @@ func main() {
 
 	// 启动worker（非阻塞）
 	go func() {
-		log.Printf("[%s] 定时任务启动，间隔: %ds", serviceName, config.AppConfig.VideoDeleteDelayTime)
+		utils.Logger.Info("定时任务启动",
+			zap.String("service", serviceName),
+			zap.Int("interval_seconds", config.AppConfig.VideoDeleteDelayTime))
 		worker.StartWorker()
 	}()
 
@@ -84,41 +90,51 @@ func main() {
 	}
 
 	go func() {
-		log.Printf("[%s] 管理服务器启动在 %s", serviceName, addr)
+		utils.Logger.Info("管理服务器启动",
+			zap.String("service", serviceName),
+			zap.String("addr", addr))
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("[%s] 服务器启动失败: %v", serviceName, err)
+			utils.Logger.Fatal("服务器启动失败",
+				zap.String("service", serviceName),
+				zap.Error(err))
 		}
 	}()
 
 	time.Sleep(100 * time.Millisecond)
 	healthChecker.SetReady()
-	log.Printf("[%s] 服务已就绪", serviceName)
+	utils.Logger.Info("服务已就绪",
+		zap.String("service", serviceName))
 
 	// ========== 第6步：优雅关闭 ==========
 	shutdownManager := shutdown.New(serviceName, 30*time.Second)
 
 	shutdownManager.Register(func(ctx context.Context) error {
 		healthChecker.SetNotReady()
-		log.Printf("[%s] 已标记为未就绪，停止接收新任务", serviceName)
+		utils.Logger.Info("已标记为未就绪，停止接收新任务",
+			zap.String("service", serviceName))
 		return nil
 	})
 
 	shutdownManager.Register(func(ctx context.Context) error {
-		log.Printf("[%s] 正在停止定时任务...", serviceName)
-		worker.Stop() // 需要在scheduler包中添加Stop方法
+		utils.Logger.Info("正在停止定时任务",
+			zap.String("service", serviceName))
+		worker.Stop()
 		return nil
 	})
 
 	shutdownManager.Register(func(ctx context.Context) error {
-		log.Printf("[%s] 正在关闭HTTP服务器...", serviceName)
+		utils.Logger.Info("正在关闭HTTP服务器",
+			zap.String("service", serviceName))
 		return server.Shutdown(ctx)
 	})
 
 	shutdownManager.Register(func(ctx context.Context) error {
-		log.Printf("[%s] 正在关闭数据库连接...", serviceName)
+		utils.Logger.Info("正在关闭数据库连接",
+			zap.String("service", serviceName))
 		return sqlDB.Close()
 	})
 
 	shutdownManager.Wait()
-	log.Printf("[%s] 服务已停止", serviceName)
+	utils.Logger.Info("服务已停止",
+		zap.String("service", serviceName))
 }
