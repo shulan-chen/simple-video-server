@@ -33,6 +33,9 @@ func main() {
 	healthChecker := health.NewHealthChecker(serviceName)
 	healthChecker.RegisterRoutes(router)
 
+	// 启动限流器清理任务（后台运行）
+	go web.CleanupRateLimiters()
+
 	addr := config.AppConfig.WebAddr
 	if addr == "" {
 		addr = ":8080"

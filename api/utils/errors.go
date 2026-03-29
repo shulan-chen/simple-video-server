@@ -104,6 +104,30 @@ const (
 
 	// 内部错误 (3099XX)
 	ErrSchedulerInternal = 309901 // 内部错误
+
+	// ========== Web服务错误 (40YYZZ) ==========
+
+	// 请求错误 (4001XX)
+	ErrWebInvalidRequest     = 400101 // 请求格式错误
+	ErrWebRequestBodyInvalid = 400102 // 请求体解析失败
+	ErrWebMethodNotAllowed   = 400103 // 请求方法不支持
+
+	// 代理错误 (4002XX)
+	ErrWebProxyFailed     = 400201 // 代理请求失败
+	ErrWebProxyTimeout    = 400202 // 代理请求超时
+	ErrWebInvalidProxyURL = 400203 // 代理URL无效
+
+	// 模板错误 (4003XX)
+	ErrWebTemplateRender = 400301 // 模板渲染失败
+
+	// 限流错误 (4006XX)
+	ErrWebRateLimitExceeded = 400601 // 请求频率超限
+
+	// 熔断错误 (4007XX)
+	ErrWebCircuitBreakerOpen = 400701 // 熔断器打开
+
+	// 内部错误 (4099XX)
+	ErrWebInternalFault = 409901 // 内部服务错误
 )
 
 // 错误码到HTTP状态码的映射
@@ -188,6 +212,28 @@ var errorHTTPStatus = map[int]int{
 	ErrSchedulerTaskFailed: http.StatusInternalServerError,
 	ErrSchedulerDBError:    http.StatusInternalServerError,
 	ErrSchedulerInternal:   http.StatusInternalServerError,
+
+	// Web - 请求错误 -> 400
+	ErrWebInvalidRequest:     http.StatusBadRequest,
+	ErrWebRequestBodyInvalid: http.StatusBadRequest,
+	ErrWebMethodNotAllowed:   http.StatusMethodNotAllowed,
+
+	// Web - 代理错误 -> 502/504
+	ErrWebProxyFailed:     http.StatusBadGateway,
+	ErrWebProxyTimeout:    http.StatusGatewayTimeout,
+	ErrWebInvalidProxyURL: http.StatusBadRequest,
+
+	// Web - 模板错误 -> 500
+	ErrWebTemplateRender: http.StatusInternalServerError,
+
+	// Web - 限流错误 -> 429
+	ErrWebRateLimitExceeded: http.StatusTooManyRequests,
+
+	// Web - 熔断错误 -> 503
+	ErrWebCircuitBreakerOpen: http.StatusServiceUnavailable,
+
+	// Web - 内部错误 -> 500
+	ErrWebInternalFault: http.StatusInternalServerError,
 }
 
 // 错误码到用户友好消息的映射
@@ -270,6 +316,28 @@ var errorMessages = map[int]string{
 	ErrSchedulerTaskFailed: "定时任务执行失败",
 	ErrSchedulerDBError:    "数据库操作失败",
 	ErrSchedulerInternal:   "调度服务内部错误",
+
+	// Web - 请求错误
+	ErrWebInvalidRequest:     "请求格式错误",
+	ErrWebRequestBodyInvalid: "请求体解析失败",
+	ErrWebMethodNotAllowed:   "请求方法不支持",
+
+	// Web - 代理错误
+	ErrWebProxyFailed:     "后端服务请求失败",
+	ErrWebProxyTimeout:    "后端服务响应超时",
+	ErrWebInvalidProxyURL: "无效的请求地址",
+
+	// Web - 模板错误
+	ErrWebTemplateRender: "页面渲染失败",
+
+	// Web - 限流错误
+	ErrWebRateLimitExceeded: "请求过于频繁，请稍后再试",
+
+	// Web - 熔断错误
+	ErrWebCircuitBreakerOpen: "服务暂时不可用，请稍后再试",
+
+	// Web - 内部错误
+	ErrWebInternalFault: "内部服务错误",
 }
 
 // NewAppError 创建应用错误
