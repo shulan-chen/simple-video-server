@@ -4,6 +4,7 @@ go 1.24.9
 
 require (
 	github.com/golang-jwt/jwt/v5 v5.3.1
+	github.com/golang/groupcache v0.0.0-20241129210726-2c02b8208cf8
 	github.com/prometheus/client_golang v1.23.2
 	github.com/redis/go-redis/v9 v9.18.0
 	github.com/swaggo/files v1.0.1

@@ -1,36 +1,37 @@
 package middleware
 
 import (
-	"fmt"
 	"sync"
 	"time"
 
 	"video-server/api/utils"
 
 	"github.com/gin-gonic/gin"
+	"github.com/golang/groupcache/lru"
 	"go.uber.org/zap"
 	"golang.org/x/time/rate"
 )
 
 // RateLimiter 限流器管理器
-// 使用 Token Bucket 算法实现限流
+// 使用 Token Bucket 算法实现限流，基于 LRU 缓存自动淘汰不活跃的限流器
 type RateLimiter struct {
-	limiters map[string]*rate.Limiter
-	mu       sync.RWMutex
-	rate     rate.Limit // 每秒允许的请求数（速率）
-	burst    int        // 突发容量（桶大小）
+	cache *lru.Cache // LRU 缓存，自动淘汰最少使用的限流器
+	mu    sync.Mutex
+	rate  rate.Limit // 每秒允许的请求数（速率）
+	burst int        // 突发容量（桶大小）
 }
 
 // NewRateLimiter 创建限流器
 // interval: 时间间隔（如1*time.Second表示每秒）
 // maxRequests: 时间间隔内最大请求数
-func NewRateLimiter(interval time.Duration, maxRequests int) *RateLimiter {
+// cacheSize: LRU 缓存大小（限制最多保留多少个限流器）
+func NewRateLimiter(interval time.Duration, maxRequests int, cacheSize int) *RateLimiter {
 	// 计算每秒速率：rate.Every 返回每个请求之间的时间间隔
 	r := rate.Every(interval / time.Duration(maxRequests))
 	return &RateLimiter{
-		limiters: make(map[string]*rate.Limiter),
-		rate:     r,
-		burst:    maxRequests,
+		cache: lru.New(cacheSize),
+		rate:  r,
+		burst: maxRequests,
 	}
 }
 
@@ -39,11 +40,14 @@ func (rl *RateLimiter) getLimiter(key string) *rate.Limiter {
 	rl.mu.Lock()
 	defer rl.mu.Unlock()
 
-	limiter, exists := rl.limiters[key]
-	if !exists {
-		limiter = rate.NewLimiter(rl.rate, rl.burst)
-		rl.limiters[key] = limiter
+	// 从 LRU 缓存中获取
+	if v, ok := rl.cache.Get(key); ok {
+		return v.(*rate.Limiter)
 	}
+
+	// 不存在则创建新的限流器
+	limiter := rate.NewLimiter(rl.rate, rl.burst)
+	rl.cache.Add(key, limiter)
 
 	return limiter
 }
@@ -71,19 +75,22 @@ var (
 // InitRateLimiters 初始化限流器（在应用启动时调用一次）
 func InitRateLimiters() {
 	rateLimiterOnce.Do(func() {
-		// 全局限流：100 req/s per IP，突发 200
-		globalLimiter = NewRateLimiter(time.Second, 100)
+		// 全局限流：100 req/s per IP，突发 200，最多缓存 10000 个 IP
+		globalLimiter = NewRateLimiter(time.Second, 100, 10000)
 
-		// API 透传限流：10 req/s per user，突发 20
-		apiProxyLimiter = NewRateLimiter(time.Second, 10)
+		// API 透传限流：10 req/s per user，突发 20，最多缓存 5000 个用户
+		apiProxyLimiter = NewRateLimiter(time.Second, 10, 5000)
 
-		// 视频代理限流：5 req/s per user，突发 10
-		videoProxyLimiter = NewRateLimiter(time.Second, 5)
+		// 视频代理限流：5 req/s per user，突发 10，最多缓存 5000 个用户
+		videoProxyLimiter = NewRateLimiter(time.Second, 5, 5000)
 
-		utils.Logger.Info("限流器初始化完成",
+		utils.Logger.Info("限流器初始化完成（基于 LRU 自动淘汰）",
 			zap.Int("global_rate", 100),
+			zap.Int("global_cache_size", 10000),
 			zap.Int("api_proxy_rate", 10),
-			zap.Int("video_proxy_rate", 5))
+			zap.Int("api_cache_size", 5000),
+			zap.Int("video_proxy_rate", 5),
+			zap.Int("video_cache_size", 5000))
 	})
 }
 
@@ -148,29 +155,6 @@ func VideoProxyRateLimiter() gin.HandlerFunc {
 		}
 
 		c.Next()
-	}
-}
-
-// CleanupRateLimiters 定期清理不活跃的限流器（节省内存）
-// 每小时清理一次，防止 limiters map 无限增长
-func CleanupRateLimiters() {
-	ticker := time.NewTicker(1 * time.Hour)
-	defer ticker.Stop()
-
-	for range ticker.C {
-		// 清理所有限流器的缓存
-		cleanLimiter := func(rl *RateLimiter, name string) {
-			rl.mu.Lock()
-			oldSize := len(rl.limiters)
-			rl.limiters = make(map[string]*rate.Limiter)
-			rl.mu.Unlock()
-			utils.Logger.Info(fmt.Sprintf("%s限流器清理完成", name),
-				zap.Int("cleaned_count", oldSize))
-		}
-
-		cleanLimiter(globalLimiter, "全局")
-		cleanLimiter(apiProxyLimiter, "API透传")
-		cleanLimiter(videoProxyLimiter, "视频代理")
 	}
 }
 

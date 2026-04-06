@@ -79,8 +79,8 @@ func GetOssVideoURL(ctx context.Context, fileName string) (string, error) {
 		Key:    oss.Ptr(OSS_VIDEO_DIR + fileName),
 	}
 
-	// 生成预签名 URL，有效期设置为 1 小时 (3600秒)
-	result, err := ossClient.Presign(ctx, request, oss.PresignExpires(1*time.Hour))
+	// 生成预签名 URL，有效期设置为 12 小时 (43200秒)
+	result, err := ossClient.Presign(ctx, request, oss.PresignExpires(12*time.Hour))
 	if err != nil {
 		utils.Logger.Error("Sign URL error", zap.Error(err))
 		return "", err
