@@ -53,6 +53,7 @@ func RegisterHandlers() *gin.Engine {
 	return r
 }
 
+// 已废弃，保留以供测试使用
 func Start() {
 	r := RegisterHandlers()
 	// 注意：stream 服务监听 9090 端口

@@ -53,12 +53,15 @@ func main() {
 	runner := scheduler.NewRunner(3, true, scheduler.VideoClearDispatcher, scheduler.VideoClearExecutor)
 	worker := scheduler.NewWorker(time.Duration(config.AppConfig.VideoDeleteDelayTime)*time.Second, runner)
 
+	// 记录启动时间
+	workerStartTime := time.Now()
+
 	// 启动worker（非阻塞）
 	go func() {
 		utils.Logger.Info("定时任务启动",
 			zap.String("service", serviceName),
 			zap.Int("interval_seconds", config.AppConfig.VideoDeleteDelayTime))
-		worker.StartWorker()
+		worker.Start()
 	}()
 
 	// ========== 第5步：启动健康检查服务器 ==========
@@ -76,7 +79,7 @@ func main() {
 		c.JSON(http.StatusOK, gin.H{
 			"service": serviceName,
 			"status":  "running",
-			"uptime":  time.Since(worker.StartTime).String(),
+			"uptime":  time.Since(workerStartTime).String(),
 		})
 	})
 

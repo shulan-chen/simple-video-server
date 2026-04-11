@@ -205,17 +205,36 @@ func InsertNewVideoDeletionRecord(vid string) error {
 	return nil
 }
 
+// ReadVideoDeletionRecord 读取待删除的视频记录（未被软删除的）
 func ReadVideoDeletionRecord(count int) ([]string, error) {
 	var vids []string
-	err := Db.Model(&api.VideoDeletionRecord{}).Limit(count).Pluck("vid", &vids).Error
+	// GORM 自动过滤 deleted_at IS NULL 的记录
+	err := Db.Model(&api.VideoDeletionRecord{}).
+		Limit(count).
+		Pluck("vid", &vids).Error
 	if err != nil {
 		return nil, err
 	}
 	return vids, nil
 }
 
+// SoftDeleteVideoDeletionRecord 软删除视频删除记录（标记 deleted_at）
+func SoftDeleteVideoDeletionRecord(vid string) error {
+	// GORM 的 Delete 会自动设置 deleted_at 字段
+	return Db.Where("vid = ?", vid).Delete(&api.VideoDeletionRecord{}).Error
+}
+
+// RestoreVideoDeletionRecord 恢复软删除的记录（回滚操作）
+func RestoreVideoDeletionRecord(vid string) error {
+	// 清空 deleted_at 字段，恢复记录
+	return Db.Model(&api.VideoDeletionRecord{}).
+		Unscoped().
+		Where("vid = ?", vid).
+		Update("deleted_at", nil).Error
+}
+
+// DeleteVideoDeletionRecord 物理删除视频删除记录（最终清理）
 func DeleteVideoDeletionRecord(vid string) error {
-	// 删除记录表不需要软删除，直接物理删除
-	result := Db.Unscoped().Where("vid = @vid", sql.Named("vid", vid)).Delete(&api.VideoDeletionRecord{})
-	return result.Error
+	// Unscoped() 执行物理删除
+	return Db.Unscoped().Where("vid = ?", vid).Delete(&api.VideoDeletionRecord{}).Error
 }

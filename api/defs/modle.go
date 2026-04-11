@@ -48,9 +48,13 @@ type VideoInfoDTO struct {
 	Videos []*VideoInfo `json:"videos"`
 }
 
+// VideoDeletionRecord 视频删除记录（使用 GORM 标准逻辑删除）
 type VideoDeletionRecord struct {
-	Id  int    `gorm:"primaryKey;autoIncrement;column:id"`
-	Vid string `json:"vid" gorm:"column:vid"`
+	Id        int            `gorm:"primaryKey;autoIncrement;column:id"`
+	Vid       string         `json:"vid" gorm:"column:vid;index"`
+	CreatedAt time.Time      `json:"created_at" gorm:"column:created_at;autoCreateTime"`
+	UpdatedAt time.Time      `json:"updated_at" gorm:"column:updated_at;autoUpdateTime"`
+	DeletedAt gorm.DeletedAt `json:"deleted_at" gorm:"column:deleted_at;index"` // GORM 标准逻辑删除
 }
 
 func (VideoDeletionRecord) TableName() string {

@@ -16,11 +16,11 @@ type Configuration struct {
 	StreamAddr  string `mapstructure:"stream_addr"`  // Stream服务地址
 
 	// OSS配置
-	OssAddr    string `mapstructure:"oss_addr"`
-	OssKey     string `mapstructure:"oss_key"`
-	OssSecret  string `mapstructure:"oss_secret"`
-	OssBucket  string `mapstructure:"oss_bucket"`
-	OssRegion  string `mapstructure:"oss_region"`
+	OssAddr   string `mapstructure:"oss_addr"`
+	OssKey    string `mapstructure:"oss_key"`
+	OssSecret string `mapstructure:"oss_secret"`
+	OssBucket string `mapstructure:"oss_bucket"`
+	OssRegion string `mapstructure:"oss_region"`
 
 	// 数据库配置
 	DbAddr string `mapstructure:"db_addr"`
@@ -33,8 +33,10 @@ type Configuration struct {
 	RedisPwd  string `mapstructure:"redis_pwd"`
 	RedisDB   int    `mapstructure:"redis_db"`
 
-	// 业务配置
-	VideoDeleteDelayTime int `mapstructure:"video_delete_delay_time"`
+	// 定时任务配置
+	VideoDeleteDelayTime int `mapstructure:"video_delete_delay_time"` // 视频删除延迟时间（秒）
+	VideoDeleteBatchSize int `mapstructure:"video_delete_batch_size"` // 每次处理的视频数量
+	VideoDeleteMaxRetry  int `mapstructure:"video_delete_max_retry"`  // 删除失败最大重试次数
 }
 
 var AppConfig Configuration
