@@ -1,9 +1,5 @@
 package web
 
-// ApiBody API请求体结构（用于前端API透传）
-type ApiBody struct {
-	Url     string `json:"url"`
-	Method  string `json:"method"`
-	ReqBody string `json:"req_body"`
-}
+// web 模块作为 API 网关，不再需要定义额外的数据结构
+// 所有请求直接通过反向代理转发到对应的后端服务
 

@@ -18,12 +18,22 @@ const (
 
 var ossClient *oss.Client
 
-func init() {
+// InitOSSClient 初始化 OSS 客户端（必须在 config 加载后调用）
+func InitOSSClient() {
+	// 构建完整的 Endpoint URL
+	endpoint := "https://" + config.AppConfig.OssAddr
+
 	cfg := oss.LoadDefaultConfig().
 		WithCredentialsProvider(credentials.NewStaticCredentialsProvider(config.AppConfig.OssKey, config.AppConfig.OssSecret)).
-		WithRegion(config.AppConfig.OssRegion)
+		WithRegion(config.AppConfig.OssRegion).
+		WithEndpoint(endpoint)
 
 	ossClient = oss.NewClient(cfg)
+
+	utils.Logger.Info("OSS 客户端初始化成功",
+		zap.String("endpoint", endpoint),
+		zap.String("region", config.AppConfig.OssRegion),
+		zap.String("bucket", config.AppConfig.OssBucket))
 }
 
 func UploadToOSS(ctx context.Context, fileName string, fileData io.Reader, contentType string) error {

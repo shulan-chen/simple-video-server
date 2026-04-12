@@ -63,10 +63,14 @@ func DeleteUser(id int, userName string) error {
 }
 
 // video info related db ops
-func AddNewVideo(aid int, name string) (*api.VideoInfo, error) {
-	vid, err := utils.NewUUID()
-	if err != nil {
-		panic("error to make a new uuid")
+func AddNewVideo(vid string, aid int, name string) (*api.VideoInfo, error) {
+	// 如果前端没有传 vid，则后端生成（向后兼容）
+	if vid == "" {
+		var err error
+		vid, err = utils.NewUUID()
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	video := &api.VideoInfo{

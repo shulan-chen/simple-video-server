@@ -46,8 +46,14 @@ func RegisterHandlers() *gin.Engine {
 	r.Use(middleware.ErrorHandler()) // 3. 错误处理（最后）
 
 	// 路由注册
+
+	// 视频播放接口
 	r.GET("/videos/:vid-id", streamOssHandler)
+
+	// 视频上传接口（供 API 服务调用，无需认证）
 	r.POST("/videos/upload/:vid-id", uploadOssHandler)
+
+	// 测试页面
 	r.GET("/testVideoPage", testPageHandler)
 
 	return r

@@ -26,6 +26,9 @@ func main() {
 	utils.InitLogging()
 	utils.Logger.Info("服务启动中", zap.String("service", serviceName))
 
+	// ========== 第2.5步：初始化 OSS 客户端 ==========
+	stream.InitOSSClient()
+
 	// ========== 第3步：创建HTTP服务器 ==========
 	router := stream.RegisterHandlers()
 

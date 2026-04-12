@@ -384,17 +384,19 @@ func GetUserInfo(c *gin.Context) {
 	c.JSON(http.StatusOK, user)
 }
 
-// AddNewVideo 添加视频元数据
-// @Summary      添加视频
-// @Description  创建视频元数据记录（上传视频文件后调用）
+// AddNewVideo 添加视频（事务性上传：文件 + 元数据）
+// @Summary      上传视频
+// @Description  事务性上传视频文件和元数据，保证一致性
 // @Tags         视频管理
-// @Accept       json
+// @Accept       multipart/form-data
 // @Produce      json
-// @Param        user_name  path      string                    true  "用户名"
-// @Param        video      body      api.UserAddNewVideoDTO    true  "视频信息"
-// @Success      200        {object}  api.VideoInfo
-// @Failure      400        {object}  utils.AppError
-// @Failure      500        {object}  utils.AppError
+// @Param        user_name   path      string  true   "用户名"
+// @Param        file        formData  file    true   "视频文件"
+// @Param        video_name  formData  string  true   "视频名称"
+// @Success      200         {object}  api.VideoInfo
+// @Failure      400         {object}  utils.AppError
+// @Failure      401         {object}  utils.AppError  "未登录或登录过期"
+// @Failure      500         {object}  utils.AppError
 // @Security     Bearer
 // @Router       /user/{user_name}/videos [post]
 func AddNewVideo(c *gin.Context) {
@@ -402,37 +404,100 @@ func AddNewVideo(c *gin.Context) {
 	userID := c.GetString("user_id")
 	userName := c.GetString("user_name")
 
-	userNewVideoDTO := &api.UserAddNewVideoDTO{}
-	if err := c.ShouldBindJSON(userNewVideoDTO); err != nil {
-		utils.Logger.Error("解析请求体失败",
+	utils.Logger.Info("开始事务性视频上传",
+		zap.String("trace_id", traceID),
+		zap.String("user_name", userName),
+		zap.String("user_id", userID))
+
+	// 解析 multipart 表单
+	if err := c.Request.ParseMultipartForm(100 << 20); err != nil { // 100MB
+		utils.Logger.Error("解析表单失败",
 			zap.String("trace_id", traceID),
-			zap.String("user_id", userID),
 			zap.Error(err))
 		utils.AbortWithError(c, utils.ErrAPIInvalidRequest, err)
 		return
 	}
 
-	videoInfo, err := dbops.AddNewVideo(userNewVideoDTO.AuthorId, userNewVideoDTO.Name)
+	// 获取文件
+	file, header, err := c.Request.FormFile("file")
 	if err != nil {
-		utils.Logger.Error("添加视频失败",
+		utils.Logger.Error("获取上传文件失败",
 			zap.String("trace_id", traceID),
-			zap.String("user_name", userName),
-			zap.String("video_name", userNewVideoDTO.Name),
+			zap.Error(err))
+		utils.AbortWithError(c, utils.ErrAPIInvalidRequest, err)
+		return
+	}
+	defer file.Close()
+
+	// 获取视频名称
+	videoName := c.PostForm("video_name")
+	if videoName == "" {
+		utils.Logger.Error("缺少视频名称",
+			zap.String("trace_id", traceID))
+		utils.AbortWithErrorMsg(c, utils.ErrAPIInvalidRequest, "缺少 video_name 参数")
+		return
+	}
+
+	// 解析 user_id
+	userIDInt, _ := strconv.Atoi(userID)
+
+	// ========== 事务性操作开始 ==========
+
+	// 步骤1：创建数据库记录（生成 UUID）
+	videoInfo, err := dbops.AddNewVideo("", userIDInt, videoName)
+	if err != nil {
+		utils.Logger.Error("创建视频记录失败",
+			zap.String("trace_id", traceID),
+			zap.String("video_name", videoName),
 			zap.Error(err))
 		utils.AbortWithError(c, utils.ErrAPIDBInsert, err)
 		return
 	}
 
+	videoID := videoInfo.Vid
+	utils.Logger.Info("数据库记录创建成功，开始上传文件",
+		zap.String("trace_id", traceID),
+		zap.String("video_id", videoID))
+
+	// 步骤2：调用 Stream 服务上传文件
+	// 重置文件读取位置
+	file.Seek(0, 0)
+	contentType := header.Header.Get("Content-Type")
+
+	if err := UploadVideoToStream(videoID, file, contentType); err != nil {
+		utils.Logger.Error("上传文件到Stream失败，回滚删除数据库记录",
+			zap.String("trace_id", traceID),
+			zap.String("video_id", videoID),
+			zap.Error(err))
+
+		// 回滚：删除数据库记录
+		if deleteErr := dbops.DeleteVideoInfo(videoID); deleteErr != nil {
+			utils.Logger.Error("回滚删除数据库记录失败",
+				zap.String("trace_id", traceID),
+				zap.String("video_id", videoID),
+				zap.Error(deleteErr))
+		} else {
+			utils.Logger.Info("已回滚删除数据库记录",
+				zap.String("trace_id", traceID),
+				zap.String("video_id", videoID))
+		}
+
+		utils.AbortWithError(c, utils.ErrAPIDBInsert, err)
+		return
+	}
+
+	// ========== 事务性操作成功 ==========
+
 	// 使相关缓存失效
 	ctx := c.Request.Context()
-	cache.InvalidateAllVideos(ctx)                            // 全部视频列表
-	cache.InvalidateUserVideos(ctx, userNewVideoDTO.AuthorId) // 用户视频列表
+	cache.InvalidateAllVideos(ctx)          // 全部视频列表
+	cache.InvalidateUserVideos(ctx, userIDInt) // 用户视频列表
 
-	utils.Logger.Info("添加视频成功",
+	utils.Logger.Info("视频上传完成（文件+元数据）",
 		zap.String("trace_id", traceID),
 		zap.String("user_name", userName),
-		zap.String("video_id", videoInfo.Vid),
-		zap.String("video_name", videoInfo.Name))
+		zap.String("video_id", videoID),
+		zap.String("video_name", videoName))
 
 	c.JSON(http.StatusOK, videoInfo)
 }

@@ -41,26 +41,23 @@ func RegisterHandlers() *gin.Engine {
 	// 7. ErrorHandler 中间件（最后执行，捕获所有错误）
 	router.Use(middleware.ErrorHandler())
 
-	// ========== 模板和静态文件 ==========
-	router.LoadHTMLGlob("templates/*.html")
-	router.Static("/statics/", "./templates")
-
-	// ========== 路由注册 ==========
+	// ========== 路由注册（网关模式 - 前后端分离）==========
 	// Prometheus metrics 端点
 	router.GET("/metrics", metrics.PrometheusHandler())
 
-	// 页面路由
-	router.GET("/", homeHandler)
-	router.POST("/", homeHandler)
-	router.GET("/userhome", userHomeHandler)
-	router.POST("/userhome", userHomeHandler)
+	// API 代理路由组（代理到 API 服务）
+	apiGroup := router.Group("/api", middleware.APIProxyRateLimiter())
+	{
+		// 匹配所有 /api/* 的请求并代理到 API 服务
+		apiGroup.Any("/*path", proxyToAPIHandler)
+	}
 
-	// API透传路由（带 API 代理限流）
-	router.POST("/api", middleware.APIProxyRateLimiter(), apiHandler)
-
-	// 视频代理路由（转发到Stream服务，带视频代理限流）
-	router.GET("/videos/:vid-id", middleware.VideoProxyRateLimiter(), proxyVideoViewHandler)
-	router.POST("/videos/upload/:vid-id", middleware.VideoProxyRateLimiter(), proxyUploadHandler)
+	// Stream 代理路由组（代理到 Stream 服务）
+	streamGroup := router.Group("/stream", middleware.VideoProxyRateLimiter())
+	{
+		// 匹配所有 /stream/* 的请求并代理到 Stream 服务
+		streamGroup.Any("/*path", proxyToStreamHandler)
+	}
 
 	return router
 }

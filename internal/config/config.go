@@ -50,6 +50,9 @@ func Load(configPath string) error {
 	if envPath := os.Getenv("CONFIG_PATH"); envPath != "" {
 		configPath = envPath
 	}
+	if configPath == "" {
+		configPath = "config.json" // 默认配置文件路径
+	}
 
 	// 设置配置文件路径
 	viper.SetConfigFile(configPath)

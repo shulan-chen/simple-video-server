@@ -10,7 +10,7 @@ type User struct {
 	Id        int            `json:"id" gorm:"primaryKey;autoIncrement;column:id"`
 	Username  string         `json:"name" gorm:"column:name;unique"`
 	Password  string         `json:"password" gorm:"column:password"`
-	IsVaild   int            `json:"isVaild" gorm:"column:isVaild"`
+	IsVaild   int            `json:"isVaild" gorm:"column:is_valid"`
 	CreatedAt time.Time      `json:"created_at" gorm:"column:created_at;autoCreateTime"`
 	DeletedAt gorm.DeletedAt `json:"-" gorm:"column:deleted_at;index"`
 }
@@ -100,6 +100,7 @@ func (SimpleSession) TableName() string {
 }
 
 type UserAddNewVideoDTO struct {
+	Vid      string `json:"vid"`       // 视频ID（前端生成，保证文件和元数据使用同一个ID）
 	AuthorId int    `json:"author_id"`
 	Name     string `json:"name"`
 }
