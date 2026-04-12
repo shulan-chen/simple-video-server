@@ -36,7 +36,6 @@ type Configuration struct {
 	// 定时任务配置
 	VideoDeleteDelayTime int `mapstructure:"video_delete_delay_time"` // 视频删除延迟时间（秒）
 	VideoDeleteBatchSize int `mapstructure:"video_delete_batch_size"` // 每次处理的视频数量
-	VideoDeleteMaxRetry  int `mapstructure:"video_delete_max_retry"`  // 删除失败最大重试次数
 }
 
 var AppConfig Configuration

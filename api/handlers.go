@@ -15,6 +15,12 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+const (
+	HEADER_FILED_SESSION = "X-Session-Id"
+	HEADER_FILED_UNAME   = "X-User-Name"
+	HEADER_FILED_UID     = "X-User-Id"
+)
+
 // CreateUser 用户注册
 // @Summary      用户注册
 // @Description  创建新用户账号
@@ -355,10 +361,6 @@ func GetUserInfo(c *gin.Context) {
 	traceID := c.GetString("trace_id")
 	userName := c.Param("user_name")
 
-	if !ValidateUser(c.Writer, c.Request) {
-		return
-	}
-
 	// GetUserInfo接口按username查询，不适合缓存（因为key是userId）
 	// 如果要缓存需要建立username->userId映射，增加复杂度
 	// 此接口不是高频调用，直接查数据库
@@ -400,10 +402,6 @@ func AddNewVideo(c *gin.Context) {
 	userID := c.GetString("user_id")
 	userName := c.GetString("user_name")
 
-	if !ValidateUser(c.Writer, c.Request) {
-		return
-	}
-
 	userNewVideoDTO := &api.UserAddNewVideoDTO{}
 	if err := c.ShouldBindJSON(userNewVideoDTO); err != nil {
 		utils.Logger.Error("解析请求体失败",
@@ -427,8 +425,8 @@ func AddNewVideo(c *gin.Context) {
 
 	// 使相关缓存失效
 	ctx := c.Request.Context()
-	cache.InvalidateAllVideos(ctx)                             // 全部视频列表
-	cache.InvalidateUserVideos(ctx, userNewVideoDTO.AuthorId)  // 用户视频列表
+	cache.InvalidateAllVideos(ctx)                            // 全部视频列表
+	cache.InvalidateUserVideos(ctx, userNewVideoDTO.AuthorId) // 用户视频列表
 
 	utils.Logger.Info("添加视频成功",
 		zap.String("trace_id", traceID),
@@ -455,11 +453,7 @@ func ListUserAllVideos(c *gin.Context) {
 	traceID := c.GetString("trace_id")
 	userName := c.GetString("user_name")
 
-	if !ValidateUser(c.Writer, c.Request) {
-		return
-	}
-
-	uid := c.Request.Header.Get(HEADER_FILED_UID)
+	uid := c.GetString("user_id")
 	uidInt, _ := strconv.Atoi(uid)
 
 	// 1. 先查缓存
@@ -511,11 +505,6 @@ func ListUserAllVideos(c *gin.Context) {
 // @Router       /videos [get]
 func ListAllVideos(c *gin.Context) {
 	traceID := c.GetString("trace_id")
-
-	if !ValidateUser(c.Writer, c.Request) {
-		return
-	}
-
 	// 1. 先查缓存（热门数据）
 	videoInfos, err := cache.GetAllVideos(c.Request.Context())
 	if err == nil {
@@ -565,11 +554,7 @@ func DeleteVideoInfo(c *gin.Context) {
 	traceID := c.GetString("trace_id")
 	userName := c.GetString("user_name")
 
-	if !ValidateUser(c.Writer, c.Request) {
-		return
-	}
-
-	uid := c.Request.Header.Get(HEADER_FILED_UID)
+	uid := c.GetString("user_id")
 	uidInt, _ := strconv.Atoi(uid)
 	vid := c.Param("vid")
 
@@ -629,10 +614,10 @@ func DeleteVideoInfo(c *gin.Context) {
 
 	// 使相关缓存失效
 	ctx := c.Request.Context()
-	cache.InvalidateAllVideos(ctx)              // 全部视频列表
-	cache.InvalidateUserVideos(ctx, uidInt)     // 用户视频列表
-	cache.DeleteVideo(ctx, vid)                 // 视频详情
-	cache.InvalidateComments(ctx, vid)          // 视频评论
+	cache.InvalidateAllVideos(ctx)          // 全部视频列表
+	cache.InvalidateUserVideos(ctx, uidInt) // 用户视频列表
+	cache.DeleteVideo(ctx, vid)             // 视频详情
+	cache.InvalidateComments(ctx, vid)      // 视频评论
 
 	utils.Logger.Info("删除视频成功",
 		zap.String("trace_id", traceID),
@@ -659,11 +644,6 @@ func DeleteVideoInfo(c *gin.Context) {
 func PostComments(c *gin.Context) {
 	traceID := c.GetString("trace_id")
 	userName := c.GetString("user_name")
-
-	if !ValidateUser(c.Writer, c.Request) {
-		return
-	}
-
 	vid := c.Param("vid")
 	userComment := &api.PostCommentsDTO{}
 
@@ -712,11 +692,6 @@ func PostComments(c *gin.Context) {
 // @Router       /videos/{vid}/comments [get]
 func ListComments(c *gin.Context) {
 	traceID := c.GetString("trace_id")
-
-	if !ValidateUser(c.Writer, c.Request) {
-		return
-	}
-
 	vid := c.Param("vid")
 
 	// 1. 先查缓存

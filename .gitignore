@@ -6,6 +6,7 @@ server
 main
 app.log
 config/config.json
+internal/config/config.json
 logs/
 bin/
 # Swagger生成的文档
