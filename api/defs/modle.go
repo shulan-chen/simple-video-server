@@ -31,13 +31,14 @@ type SignedUP struct {
 }
 
 type VideoInfo struct {
-	Id          int            `gorm:"primaryKey;autoIncrement;column:id"`
-	Vid         string         `json:"id" gorm:"column:vid"`
-	AuthorId    int            `json:"author_id" gorm:"column:author_id"`
-	Name        string         `json:"name" gorm:"column:name"`
-	CreatedTime time.Time      `json:"create_time" gorm:"column:create_time;autoCreateTime"`
-	ClickCount  int            `json:"click_count" gorm:"column:click_count"`
-	DeletedAt   gorm.DeletedAt `json:"-" gorm:"column:deleted_at;index"`
+	Id           int            `gorm:"primaryKey;autoIncrement;column:id"`
+	Vid          string         `json:"id" gorm:"column:vid"`
+	AuthorId     int            `json:"author_id" gorm:"column:author_id"`
+	Name         string         `json:"name" gorm:"column:name"`
+	ThumbnailUrl string         `json:"thumbnail_url" gorm:"column:thumbnail_url;size:512"` // 缩略图OSS URL
+	CreatedTime  time.Time      `json:"create_time" gorm:"column:create_time;autoCreateTime"`
+	ClickCount   int            `json:"click_count" gorm:"column:click_count"`
+	DeletedAt    gorm.DeletedAt `json:"-" gorm:"column:deleted_at;index"`
 }
 
 func (VideoInfo) TableName() string {
@@ -100,13 +101,12 @@ func (SimpleSession) TableName() string {
 }
 
 type UserAddNewVideoDTO struct {
-	Vid      string `json:"vid"`       // 视频ID（前端生成，保证文件和元数据使用同一个ID）
+	Vid      string `json:"vid"` // 视频ID（前端生成，保证文件和元数据使用同一个ID）
 	AuthorId int    `json:"author_id"`
 	Name     string `json:"name"`
 }
 
 type PostCommentsDTO struct {
-	//VideoId  string `json:"video_id"`
-	AuthorId int    `json:"author_id"`
-	Content  string `json:"content"`
+	// author_id 从 JWT token 中提取，不需要前端传递
+	Content string `json:"content" binding:"required"`
 }

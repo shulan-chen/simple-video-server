@@ -6,7 +6,6 @@ import (
 	"strings"
 	"video-server/api/dbops"
 	"video-server/api/utils"
-	"video-server/internal/config"
 	"video-server/stream"
 
 	"go.uber.org/zap"
@@ -15,12 +14,8 @@ import (
 // VideoClearDispatcher 从数据库读取待删除的视频 ID 并发送到 channel
 // 职责：批量读取任务，推送到执行队列
 // 返回：nil 表示成功（包括暂无任务的情况），error 表示真正的错误
-func VideoClearDispatcher(dc dataChannel) error {
-	batchSize := config.AppConfig.VideoDeleteBatchSize
-	if batchSize <= 0 {
-		batchSize = 5 // 默认值
-	}
-	vids, err := dbops.ReadVideoDeletionRecord(batchSize)
+func (r *Runner) VideoClearDispatcher(dc dataChannel) error {
+	vids, err := dbops.ReadVideoDeletionRecord(r.dataSize)
 	if err != nil {
 		utils.Logger.Error("读取待删除视频记录失败", zap.Error(err))
 		return err
@@ -38,7 +33,7 @@ func VideoClearDispatcher(dc dataChannel) error {
 
 // VideoClearExecutor 执行视频删除任务（事务性删除）
 // 职责：执行删除逻辑，保证事务性和可回滚
-func VideoClearExecutor(dc dataChannel) error {
+func (r *Runner) VideoClearExecutor(dc dataChannel) error {
 	var (
 		successCount int
 		failedVids   []string
@@ -87,8 +82,10 @@ drainLoop:
 //
 // 事务流程：
 //  1. 软删除数据库记录（设置 deleted_at）
-//  2. 删除 OSS 文件
-//  3. 成功 → 物理删除数据库记录
+//  2. 删除 OSS 视频文件
+//  3. 删除 OSS 封面文件
+//  4. 删除视频评论
+//  5. 成功 → 物理删除数据库记录
 //     失败 → 恢复软删除（清空 deleted_at）
 func deleteVideoTransaction(ctx context.Context, vid string) error {
 	// 步骤1：软删除记录（GORM 标准逻辑删除）
@@ -96,23 +93,32 @@ func deleteVideoTransaction(ctx context.Context, vid string) error {
 		return fmt.Errorf("软删除记录失败: %w", err)
 	}
 
-	// 步骤2：删除 OSS 文件
+	// 步骤2：删除 OSS 视频文件
 	if err := stream.DeleteFromOSS(ctx, vid); err != nil {
 		// OSS 删除失败 → 恢复软删除（回滚）
 		if rollbackErr := dbops.RestoreVideoDeletionRecord(vid); rollbackErr != nil {
 			utils.Logger.Error("回滚软删除失败",
 				zap.String("vid", vid),
 				zap.Error(rollbackErr))
-			return fmt.Errorf("OSS删除失败且回滚失败: oss_err=%w, rollback_err=%v", err, rollbackErr)
+			return fmt.Errorf("OSS视频删除失败且回滚失败: oss_err=%w, rollback_err=%v", err, rollbackErr)
 		}
 
-		utils.Logger.Warn("OSS 删除失败，已回滚，等待下次重试",
+		utils.Logger.Warn("OSS 视频删除失败，已回滚，等待下次重试",
 			zap.String("vid", vid),
 			zap.Error(err))
-		return fmt.Errorf("OSS删除失败: %w", err)
+		return fmt.Errorf("OSS视频删除失败: %w", err)
 	}
 
-	// 步骤3：OSS 删除成功 → 物理删除数据库记录
+	// 步骤3：删除 OSS 封面文件（titlePage/{vid}.jpg）
+	if err := stream.DeleteThumbnailFromOSS(ctx, vid); err != nil {
+		// 封面删除失败，记录日志但不回滚（视频文件已删除）
+		utils.Logger.Warn("OSS 封面删除失败（视频已删除）",
+			zap.String("vid", vid),
+			zap.Error(err))
+		// 继续执行，不阻塞整个流程
+	}
+
+	// 步骤4：OSS 删除成功 → 物理删除数据库记录
 	if err := dbops.DeleteVideoDeletionRecord(vid); err != nil {
 		utils.Logger.Error("物理删除记录失败（OSS已删除）",
 			zap.String("vid", vid),

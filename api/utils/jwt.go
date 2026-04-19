@@ -96,6 +96,23 @@ func ParseToken(tokenString string) (*Claims, error) {
 	return claims, nil
 }
 
+// ParseTokenLenient 宽容模式解析 Token（允许过期的 token，用于刷新场景）
+func ParseTokenLenient(tokenString string) (*Claims, error) {
+	claims := &Claims{}
+	_, err := jwt.ParseWithClaims(tokenString, claims,
+		func(token *jwt.Token) (interface{}, error) {
+			return getJWTSecret(), nil
+		},
+		jwt.WithoutClaimsValidation()) // 不验证过期时间
+
+	if err != nil {
+		return nil, err
+	}
+
+	// 只验证签名，不验证过期时间
+	return claims, nil
+}
+
 // GenerateToken 兼容旧代码（废弃，使用 GenerateAccessToken）
 func GenerateToken(username string, userId int) (string, error) {
 	return GenerateAccessToken(username, userId)

@@ -70,7 +70,7 @@ func StartVideoClearWorker() {
 	}
 
 	// 创建 Runner（数据缓冲区大小从配置读取，长期运行模式）
-	runner := NewRunner(batchSize, true, VideoClearDispatcher, VideoClearExecutor)
+	runner := NewRunner(batchSize, true)
 
 	// 创建 Worker 并启动
 	worker := NewWorker(interval, runner)

@@ -36,11 +36,11 @@ func InitOSSClient() {
 		zap.String("bucket", config.AppConfig.OssBucket))
 }
 
-func UploadToOSS(ctx context.Context, fileName string, fileData io.Reader, contentType string) error {
-
+func UploadToOSS(ctx context.Context, objectKey string, fileData io.Reader, contentType string) error {
+	// objectKey 直接使用传入的完整路径（videos/xxx 或 titlePage/xxx）
 	putRequest := &oss.PutObjectRequest{
 		Bucket:      oss.Ptr(config.AppConfig.OssBucket),
-		Key:         oss.Ptr(OSS_VIDEO_DIR + fileName),
+		Key:         oss.Ptr(objectKey),
 		Body:        fileData,
 		ContentType: oss.Ptr(contentType),
 	}
@@ -48,14 +48,14 @@ func UploadToOSS(ctx context.Context, fileName string, fileData io.Reader, conte
 	result, err := ossClient.PutObject(ctx, putRequest)
 	if err != nil {
 		utils.Logger.Error("上传到OSS失败",
-			zap.String("file", fileName),
+			zap.String("object_key", objectKey),
 			zap.String("bucket", config.AppConfig.OssBucket),
 			zap.Error(err))
 		return err
 	}
 
 	utils.Logger.Info("上传到OSS成功",
-		zap.String("file", fileName),
+		zap.String("object_key", objectKey),
 		zap.String("etag", *result.ETag))
 
 	return nil
@@ -69,32 +69,64 @@ func DeleteFromOSS(ctx context.Context, fileName string) error {
 
 	_, err := ossClient.DeleteObject(ctx, deleteRequest)
 	if err != nil {
-		utils.Logger.Error("从OSS删除失败",
+		utils.Logger.Error("从OSS删除视频失败",
 			zap.String("file", fileName),
 			zap.String("bucket", config.AppConfig.OssBucket),
 			zap.Error(err))
 		return err
 	}
 
-	utils.Logger.Info("从OSS删除成功",
+	utils.Logger.Info("从OSS删除视频成功",
 		zap.String("file", fileName))
 
 	return nil
 }
 
-// 新增：获取预签名 URL
-func GetOssVideoURL(ctx context.Context, fileName string) (string, error) {
-	request := &oss.GetObjectRequest{
+// DeleteThumbnailFromOSS 从 OSS 删除封面图片（titlePage/{vid}.jpg）
+func DeleteThumbnailFromOSS(ctx context.Context, vid string) error {
+	objectKey := "titlePage/" + vid + ".jpg"
+	deleteRequest := &oss.DeleteObjectRequest{
 		Bucket: oss.Ptr(config.AppConfig.OssBucket),
-		Key:    oss.Ptr(OSS_VIDEO_DIR + fileName),
+		Key:    oss.Ptr(objectKey),
 	}
 
-	// 生成预签名 URL，有效期设置为 12 小时 (43200秒)
-	result, err := ossClient.Presign(ctx, request, oss.PresignExpires(12*time.Hour))
+	_, err := ossClient.DeleteObject(ctx, deleteRequest)
 	if err != nil {
-		utils.Logger.Error("Sign URL error", zap.Error(err))
+		utils.Logger.Error("从OSS删除封面失败",
+			zap.String("vid", vid),
+			zap.String("object_key", objectKey),
+			zap.String("bucket", config.AppConfig.OssBucket),
+			zap.Error(err))
+		return err
+	}
+
+	utils.Logger.Info("从OSS删除封面成功",
+		zap.String("vid", vid),
+		zap.String("object_key", objectKey))
+
+	return nil
+}
+
+// 获取预签名 URL（通用方法）
+func GetOSSSignedURL(ctx context.Context, objectKey string, expiry time.Duration) (string, error) {
+	request := &oss.GetObjectRequest{
+		Bucket: oss.Ptr(config.AppConfig.OssBucket),
+		Key:    oss.Ptr(objectKey),
+	}
+
+	// 生成预签名 URL
+	result, err := ossClient.Presign(ctx, request, oss.PresignExpires(expiry))
+	if err != nil {
+		utils.Logger.Error("生成签名URL失败",
+			zap.String("object_key", objectKey),
+			zap.Error(err))
 		return "", err
 	}
 
 	return result.URL, nil
+}
+
+// GetOssVideoURL 获取视频的预签名 URL（兼容旧接口）
+func GetOssVideoURL(ctx context.Context, fileName string) (string, error) {
+	return GetOSSSignedURL(ctx, OSS_VIDEO_DIR+fileName, 12*time.Hour)
 }

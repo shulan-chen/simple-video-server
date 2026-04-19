@@ -11,3 +11,4 @@ logs/
 bin/
 # Swagger生成的文档
 api/docs/
+.claude

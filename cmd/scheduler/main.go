@@ -11,6 +11,7 @@ import (
 	"video-server/internal/health"
 	"video-server/internal/shutdown"
 	"video-server/scheduler"
+	"video-server/stream"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
@@ -41,6 +42,11 @@ func main() {
 			zap.Error(err))
 	}
 
+	// 初始化 OSS 客户端（scheduler 需要删除 OSS 文件）
+	stream.InitOSSClient()
+	utils.Logger.Info("OSS 客户端初始化成功",
+		zap.String("service", serviceName))
+
 	// 获取数据库实例（用于关闭）
 	sqlDB, err := dbops.Db.DB()
 	if err != nil {
@@ -50,7 +56,12 @@ func main() {
 	}
 
 	// ========== 第4步：启动定时任务 ==========
-	runner := scheduler.NewRunner(3, true, scheduler.VideoClearDispatcher, scheduler.VideoClearExecutor)
+	// 创建 Runner（数据缓冲区大小从配置读取，长期运行模式）
+	batchSize := config.AppConfig.VideoDeleteBatchSize
+	if batchSize <= 0 {
+		batchSize = 5 // 默认值
+	}
+	runner := scheduler.NewRunner(batchSize, true)
 	worker := scheduler.NewWorker(time.Duration(config.AppConfig.VideoDeleteDelayTime)*time.Second, runner)
 
 	// 记录启动时间

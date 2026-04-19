@@ -150,10 +150,30 @@ tidy:
 .PHONY: health
 health:
 	@echo "检查所有服务健康状态..."
-	@echo "API服务:" && curl -s http://localhost:8000/health/ready | jq . || echo "❌ API服务不可用"
-	@echo "Web服务:" && curl -s http://localhost:8080/health/ready | jq . || echo "❌ Web服务不可用"
-	@echo "Stream服务:" && curl -s http://localhost:9090/health/ready | jq . || echo "❌ Stream服务不可用"
-	@echo "Scheduler服务:" && curl -s http://localhost:8001/health/ready | jq . || echo "❌ Scheduler服务不可用"
+	@echo "API服务:" && \
+		if curl -s -f http://localhost:8000/health/ready > /dev/null 2>&1; then \
+			echo "✅ API服务正常"; \
+		else \
+			echo "❌ API服务不可用"; \
+		fi
+	@echo "Web服务:" && \
+		if curl -s -f http://localhost:8080/health/ready > /dev/null 2>&1; then \
+			echo "✅ Web服务正常"; \
+		else \
+			echo "❌ Web服务不可用"; \
+		fi
+	@echo "Stream服务:" && \
+		if curl -s -f http://localhost:9090/health/ready > /dev/null 2>&1; then \
+			echo "✅ Stream服务正常"; \
+		else \
+			echo "❌ Stream服务不可用"; \
+		fi
+	@echo "Scheduler服务:" && \
+		if curl -s -f http://localhost:8001/health/ready > /dev/null 2>&1; then \
+			echo "✅ Scheduler服务正常"; \
+		else \
+			echo "❌ Scheduler服务不可用"; \
+		fi
 
 # ========== Swagger文档命令 ==========
 

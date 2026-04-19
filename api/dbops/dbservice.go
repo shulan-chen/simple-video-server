@@ -63,7 +63,7 @@ func DeleteUser(id int, userName string) error {
 }
 
 // video info related db ops
-func AddNewVideo(vid string, aid int, name string) (*api.VideoInfo, error) {
+func AddNewVideo(vid string, aid int, name string, thumbnailUrl string) (*api.VideoInfo, error) {
 	// 如果前端没有传 vid，则后端生成（向后兼容）
 	if vid == "" {
 		var err error
@@ -74,9 +74,10 @@ func AddNewVideo(vid string, aid int, name string) (*api.VideoInfo, error) {
 	}
 
 	video := &api.VideoInfo{
-		Vid:      vid,
-		AuthorId: aid,
-		Name:     name,
+		Vid:          vid,
+		AuthorId:     aid,
+		Name:         name,
+		ThumbnailUrl: thumbnailUrl,
 		// CreateTime, ClickCount 会由 Tag 或数据库默认值处理
 	}
 
@@ -115,8 +116,18 @@ func GetAllVideoInfo() ([]*api.VideoInfo, error) {
 	return videos, nil
 }
 
+func UpdateVideoThumbnail(vid string, thumbnailUrl string) error {
+	return Db.Model(&api.VideoInfo{}).Where("vid = ?", vid).Update("thumbnail_url", thumbnailUrl).Error
+}
+
 func DeleteVideoInfo(vid string) error {
 	result := Db.Where("vid = @vid", sql.Named("vid", vid)).Delete(&api.VideoInfo{})
+	return result.Error
+}
+
+// DeleteVideoComments 删除视频的所有评论
+func DeleteVideoComments(vid string) error {
+	result := Db.Where("video_id = @vid", sql.Named("vid", vid)).Delete(&api.Comment{})
 	return result.Error
 }
 
@@ -209,11 +220,14 @@ func InsertNewVideoDeletionRecord(vid string) error {
 	return nil
 }
 
-// ReadVideoDeletionRecord 读取待删除的视频记录（未被软删除的）
+// ReadVideoDeletionRecord 读取待删除的视频记录
+// 使用 Unscoped() 查询所有记录，包括软删除的（deleted_at IS NOT NULL）
+// 因为只要记录存在就说明 OSS 删除未完成，需要重试
 func ReadVideoDeletionRecord(count int) ([]string, error) {
 	var vids []string
-	// GORM 自动过滤 deleted_at IS NULL 的记录
+	// Unscoped() 查询所有记录，不过滤 deleted_at
 	err := Db.Model(&api.VideoDeletionRecord{}).
+		Unscoped().
 		Limit(count).
 		Pluck("vid", &vids).Error
 	if err != nil {

@@ -13,9 +13,9 @@ import (
 
 // 缓存键前缀（Session相关）
 const (
-	prefixSession      = "session:"        // 单个session: session:<sid>
-	prefixSessionList  = "session:list:"   // session列表: session:list:<username>
-	prefixRefreshToken = "session:refresh:" // Refresh Token: session:refresh:<token>
+	prefixSession      = "session:"      // 单个session: session:<sid>
+	prefixSessionList  = "session:list:" // session列表: session:list:<username>
+	prefixRefreshToken = "refresh:"      // Refresh Token: refresh:<userId>
 )
 
 // Session缓存过期时间（与JWT token过期时间一致）
@@ -98,104 +98,87 @@ func LoadSessionList(ctx context.Context, username string) ([]api.SimpleSession,
 // ============= Refresh Token 操作 =============
 
 // SaveRefreshToken 保存 Refresh Token 到 Redis
-// Key: session:refresh:<token>, Value: user_id, TTL: 7天
-func SaveRefreshToken(ctx context.Context, refreshToken string, userId int) error {
-	key := prefixRefreshToken + refreshToken
-	return redisClient.Set(ctx, key, userId, refreshTokenTTL).Err()
+// Key: refresh:<userId>, Value: refreshToken, TTL: 7天
+// 设计说明：key 是 userId 而不是 token，这样后端可以直接通过 userId 查找 token
+func SaveRefreshToken(ctx context.Context, userId int, refreshToken string) error {
+	key := prefixRefreshToken + strconv.Itoa(userId)
+	return redisClient.Set(ctx, key, refreshToken, refreshTokenTTL).Err()
+}
+
+// GetRefreshToken 根据 userId 获取 Refresh Token
+func GetRefreshToken(ctx context.Context, userId int) (string, error) {
+	key := prefixRefreshToken + strconv.Itoa(userId)
+	return redisClient.Get(ctx, key).Result()
 }
 
 // ValidateRefreshToken 验证 Refresh Token 并返回 user_id
+// 通过遍历所有 refresh token 找到匹配的（兼容旧接口）
+// 注意：这个函数主要用于兼容前端传 refreshToken 的场景
 func ValidateRefreshToken(ctx context.Context, refreshToken string) (int, error) {
-	key := prefixRefreshToken + refreshToken
-	userIdStr, err := redisClient.Get(ctx, key).Result()
-	if err != nil {
-		if err == redis.Nil {
-			return 0, fmt.Errorf("refresh token无效或已过期")
-		}
-		return 0, err
-	}
-
-	userId, err := strconv.Atoi(userIdStr)
-	if err != nil {
-		return 0, fmt.Errorf("refresh token数据损坏")
-	}
-
-	return userId, nil
-}
-
-// DeleteRefreshToken 删除 Refresh Token（用于登出）
-func DeleteRefreshToken(ctx context.Context, refreshToken string) error {
-	key := prefixRefreshToken + refreshToken
-	return redisClient.Del(ctx, key).Err()
-}
-
-// RotateRefreshToken 轮换 Refresh Token（删除旧的，保存新的）
-func RotateRefreshToken(ctx context.Context, oldToken, newToken string, userId int) error {
-	// 使用pipeline确保原子性
-	pipe := redisClient.Pipeline()
-
-	// 删除旧token
-	oldKey := prefixRefreshToken + oldToken
-	pipe.Del(ctx, oldKey)
-
-	// 保存新token
-	newKey := prefixRefreshToken + newToken
-	pipe.Set(ctx, newKey, userId, refreshTokenTTL)
-
-	// 执行pipeline
-	_, err := pipe.Exec(ctx)
-	return err
-}
-
-// DeleteUserAllRefreshTokens 删除用户的所有 Refresh Token（用于强制登出所有设备）
-func DeleteUserAllRefreshTokens(ctx context.Context, userId int) error {
+	// 方案：遍历所有 refresh:* key 查找匹配的 token
 	pattern := prefixRefreshToken + "*"
-	iter := redisClient.Scan(ctx, 0, pattern, 0).Iterator()
+	iter := redisClient.Scan(ctx, 0, pattern, 100).Iterator()
 
-	userIdStr := strconv.Itoa(userId)
-	keysToDelete := make([]string, 0)
-
-	// 收集需要删除的key
 	for iter.Next(ctx) {
 		key := iter.Val()
-		storedUserId, err := redisClient.Get(ctx, key).Result()
+		storedToken, err := redisClient.Get(ctx, key).Result()
 		if err != nil {
 			continue
 		}
 
-		if storedUserId == userIdStr {
-			keysToDelete = append(keysToDelete, key)
+		if storedToken == refreshToken {
+			// 找到匹配的 token，从 key 中提取 userId
+			// key 格式: refresh:<userId>
+			userIdStr := key[len(prefixRefreshToken):]
+			userId, err := strconv.Atoi(userIdStr)
+			if err != nil {
+				return 0, fmt.Errorf("解析用户ID失败")
+			}
+			return userId, nil
 		}
 	}
 
 	if err := iter.Err(); err != nil {
-		return err
+		return 0, err
 	}
 
-	// 批量删除
-	if len(keysToDelete) > 0 {
-		return redisClient.Del(ctx, keysToDelete...).Err()
-	}
+	return 0, fmt.Errorf("refresh token无效或已过期")
+}
 
-	return nil
+// DeleteRefreshToken 删除 Refresh Token（根据 userId）
+func DeleteRefreshToken(ctx context.Context, userId int) error {
+	key := prefixRefreshToken + strconv.Itoa(userId)
+	return redisClient.Del(ctx, key).Err()
+}
+
+// RotateRefreshToken 轮换 Refresh Token（更新同一用户的 token）
+func RotateRefreshToken(ctx context.Context, userId int, newToken string) error {
+	key := prefixRefreshToken + strconv.Itoa(userId)
+	return redisClient.Set(ctx, key, newToken, refreshTokenTTL).Err()
+}
+
+// DeleteUserAllRefreshTokens 删除用户的 Refresh Token（用于强制登出）
+func DeleteUserAllRefreshTokens(ctx context.Context, userId int) error {
+	key := prefixRefreshToken + strconv.Itoa(userId)
+	return redisClient.Del(ctx, key).Err()
 }
 
 // RefreshTokenExists 检查 Refresh Token 是否存在
-func RefreshTokenExists(ctx context.Context, refreshToken string) bool {
-	key := prefixRefreshToken + refreshToken
+func RefreshTokenExists(ctx context.Context, userId int) bool {
+	key := prefixRefreshToken + strconv.Itoa(userId)
 	result, err := redisClient.Exists(ctx, key).Result()
 	return err == nil && result > 0
 }
 
 // ExtendRefreshToken 延长 Refresh Token 有效期（滑动过期）
-func ExtendRefreshToken(ctx context.Context, refreshToken string) error {
-	key := prefixRefreshToken + refreshToken
+func ExtendRefreshToken(ctx context.Context, userId int) error {
+	key := prefixRefreshToken + strconv.Itoa(userId)
 	return redisClient.Expire(ctx, key, refreshTokenTTL).Err()
 }
 
 // GetRefreshTokenLastUsed 获取 Refresh Token 最后使用时间（通过TTL反推）
-func GetRefreshTokenLastUsed(ctx context.Context, refreshToken string) (time.Time, error) {
-	key := prefixRefreshToken + refreshToken
+func GetRefreshTokenLastUsed(ctx context.Context, userId int) (time.Time, error) {
+	key := prefixRefreshToken + strconv.Itoa(userId)
 	ttl, err := redisClient.TTL(ctx, key).Result()
 	if err != nil {
 		return time.Time{}, err

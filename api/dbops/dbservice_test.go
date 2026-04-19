@@ -68,7 +68,7 @@ func testRegetUser(t *testing.T) {
 } */
 
 func testAddVideoInfo(t *testing.T) {
-	videoInfo, err := AddNewVideo("", 1, "test_video") // vid 为空，由后端生成
+	videoInfo, err := AddNewVideo("", 1, "test_video", "") // 缩略图为空（测试用）
 	if err != nil {
 		t.Errorf("Error of AddUser: %v", err)
 	}

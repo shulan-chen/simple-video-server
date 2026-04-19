@@ -53,6 +53,9 @@ func RegisterHandlers() *gin.Engine {
 	// 视频上传接口（供 API 服务调用，无需认证）
 	r.POST("/videos/upload/:vid-id", uploadOssHandler)
 
+	// 缩略图上传接口（供前端调用）
+	r.POST("/thumbnails/upload/:vid-id", uploadThumbnailHandler)
+
 	// 测试页面
 	r.GET("/testVideoPage", testPageHandler)
 
