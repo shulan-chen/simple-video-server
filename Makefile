@@ -100,6 +100,21 @@ start: build
 	@echo "  - Stream服务: tail -f logs/stream.log"
 	@echo "  - Scheduler服务: tail -f logs/scheduler.log"
 
+#不编译后台启动所以服务
+.PHONY: strat-without-compile
+start-without-compile:
+	@echo "后台启动所有服务..."
+	nohup $(API_BINARY) > logs/api.log 2>&1 &
+	nohup $(WEB_BINARY) > logs/web.log 2>&1 &
+	nohup $(STREAM_BINARY) > logs/stream.log 2>&1 & 
+	nohup $(SCHEDULER_BINARY) > logs/scheduler.log 2>&1 &
+	@echo "✅ 所有服务已后台启动！"
+	@echo "📄 查看日志："
+	@echo "  - API服务: tail -f logs/api.log"
+	@echo "  - Web服务: tail -f logs/web.log"
+	@echo "  - Stream服务: tail -f logs/stream.log"
+	@echo "  - Scheduler服务: tail -f logs/scheduler.log"
+
 # 停止所有服务
 .PHONY: stop
 stop:
