@@ -11,6 +11,7 @@ import (
 	"video-server/internal/config"
 	"video-server/internal/health"
 	"video-server/internal/shutdown"
+	"video-server/stream"
 
 	"go.uber.org/zap"
 )
@@ -37,6 +38,7 @@ func main() {
 
 	// ========== 第3步：初始化依赖 ==========
 	// 初始化数据库连接
+	stream.InitOSSClient()
 	if err := dbops.Init(); err != nil {
 		utils.Logger.Fatal("数据库初始化失败",
 			zap.String("service", serviceName),

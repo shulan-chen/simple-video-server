@@ -61,6 +61,7 @@ func UploadToOSS(ctx context.Context, objectKey string, fileData io.Reader, cont
 	return nil
 }
 
+
 func DeleteFromOSS(ctx context.Context, fileName string) error {
 	deleteRequest := &oss.DeleteObjectRequest{
 		Bucket: oss.Ptr(config.AppConfig.OssBucket),
@@ -129,4 +130,36 @@ func GetOSSSignedURL(ctx context.Context, objectKey string, expiry time.Duration
 // GetOssVideoURL 获取视频的预签名 URL（兼容旧接口）
 func GetOssVideoURL(ctx context.Context, fileName string) (string, error) {
 	return GetOSSSignedURL(ctx, OSS_VIDEO_DIR+fileName, 12*time.Hour)
+}
+
+// RenameThumbnailInOSS 将封面从 oldKey 复制到 newKey 后删除 oldKey。
+// 用于将上传时的临时路径（titlePage/temp_TIMESTAMP.jpg）规范化为 titlePage/{vid}.jpg。
+func RenameThumbnailInOSS(ctx context.Context, oldKey, newKey string) error {
+	_, err := ossClient.CopyObject(ctx, &oss.CopyObjectRequest{
+		Bucket:    oss.Ptr(config.AppConfig.OssBucket),
+		Key:       oss.Ptr(newKey),
+		SourceKey: oss.Ptr(oldKey),
+	})
+	if err != nil {
+		utils.Logger.Error("复制封面对象失败",
+			zap.String("old_key", oldKey),
+			zap.String("new_key", newKey),
+			zap.Error(err))
+		return err
+	}
+
+	_, err = ossClient.DeleteObject(ctx, &oss.DeleteObjectRequest{
+		Bucket: oss.Ptr(config.AppConfig.OssBucket),
+		Key:    oss.Ptr(oldKey),
+	})
+	if err != nil {
+		utils.Logger.Warn("删除旧封面对象失败（复制已成功）",
+			zap.String("old_key", oldKey),
+			zap.Error(err))
+	}
+
+	utils.Logger.Info("封面重命名成功",
+		zap.String("old_key", oldKey),
+		zap.String("new_key", newKey))
+	return nil
 }

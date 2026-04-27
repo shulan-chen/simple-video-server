@@ -179,7 +179,7 @@ func uploadThumbnailHandler(c *gin.Context) {
 	}
 	defer file.Close()
 
-	// 上传到 OSS titlePage 目录
+	// 上传到 OSS titlePage 目录，返回 object key（由 API 服务在响应时动态生成签名 URL）
 	objectKey := "titlePage/" + vid + ".jpg"
 	if err = UploadToOSS(req.Context(), objectKey, file, "image/jpeg"); err != nil {
 		utils.Logger.Error("上传缩略图到OSS失败",
@@ -191,25 +191,14 @@ func uploadThumbnailHandler(c *gin.Context) {
 		return
 	}
 
-	// 生成缩略图访问URL（预签名URL，12小时有效）
-	thumbnailUrl, err := GetOSSSignedURL(req.Context(), objectKey, 12*time.Hour)
-	if err != nil {
-		utils.Logger.Error("生成缩略图URL失败",
-			zap.String("trace_id", traceID),
-			zap.String("object_key", objectKey),
-			zap.Error(err))
-		utils.AbortWithError(c, utils.ErrStreamOSSSignURL, err)
-		return
-	}
-
 	utils.Logger.Info("上传缩略图到OSS成功",
 		zap.String("trace_id", traceID),
 		zap.String("video_id", vid),
-		zap.String("thumbnail_url", thumbnailUrl))
+		zap.String("object_key", objectKey))
 
 	c.JSON(http.StatusOK, gin.H{
 		"message":       "上传成功",
-		"thumbnail_url": thumbnailUrl,
+		"thumbnail_url": objectKey,
 	})
 }
 

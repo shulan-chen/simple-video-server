@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"video-server/api/utils"
+	"video-server/web/metrics"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
@@ -104,6 +105,7 @@ func (cb *CircuitBreaker) AllowRequest() bool {
 					zap.String("circuit", cb.name))
 				cb.state = StateHalfOpen
 				cb.successCount = 0
+				metrics.UpdateCircuitBreakerState(cb.name, int(StateHalfOpen))
 			}
 			cb.mu.Unlock()
 			return true
@@ -138,6 +140,7 @@ func (cb *CircuitBreaker) RecordSuccess() {
 			cb.state = StateClosed
 			cb.failureCount = 0
 			cb.successCount = 0
+			metrics.UpdateCircuitBreakerState(cb.name, int(StateClosed))
 		}
 	} else if cb.state == StateClosed {
 		// 关闭状态下成功，重置失败计数
@@ -160,18 +163,21 @@ func (cb *CircuitBreaker) RecordFailure() {
 		zap.String("state", cb.state.String()))
 
 	// 如果失败次数达到阈值，打开熔断器
+	metrics.RecordCircuitBreakerFailure(cb.name)
 	if cb.state == StateClosed && cb.failureCount >= cb.maxFailures {
 		utils.Logger.Error("熔断器打开（服务故障）",
 			zap.String("circuit", cb.name),
 			zap.Int("failure_count", cb.failureCount),
 			zap.Duration("timeout", cb.timeout))
 		cb.state = StateOpen
+		metrics.UpdateCircuitBreakerState(cb.name, int(StateOpen))
 	} else if cb.state == StateHalfOpen {
 		// 半开状态下失败，立即打开熔断器
 		utils.Logger.Error("熔断器重新打开（服务未恢复）",
 			zap.String("circuit", cb.name))
 		cb.state = StateOpen
 		cb.successCount = 0
+		metrics.UpdateCircuitBreakerState(cb.name, int(StateOpen))
 	}
 }
 

@@ -65,10 +65,16 @@ func RegisterHandlers() *gin.Engine {
 	middleware.InitRateLimiters()
 
 	// 中间件执行顺序（从上到下）
+	// 注意：ErrorHandler 必须在 ValidateUserMiddleware 之前注册。
+	// Gin 中间件类似嵌套调用：ErrorHandler 调用 c.Next() 进入 ValidateUser，
+	// ValidateUser 调用 c.Abort() 后控制权回到 ErrorHandler，
+	// ErrorHandler 才有机会读取 c.Errors 并写入 401 响应。
+	// 若顺序反过来，ValidateUser 的 c.Abort() 会阻止 ErrorHandler 执行，
+	// 导致 c.Errors 有内容但无响应写入，Gin 默认返回 HTTP 200 空体。
 	router.Use(middleware.TraceID())                // 1. TraceID（最先执行，为每个请求生成ID）
 	router.Use(corsMiddleware())                    // 2. CORS
-	router.Use(middleware.ValidateUserMiddleware()) // 3. 认证
-	router.Use(middleware.ErrorHandler())           // 4. 错误处理（最后执行，捕获所有错误）
+	router.Use(middleware.ErrorHandler())           // 3. 错误处理（包裹认证，才能捕获认证错误）
+	router.Use(middleware.ValidateUserMiddleware()) // 4. 认证
 
 	// 认证相关（不需要token）
 	router.POST("/user", middleware.RegisterRateLimiter(), CreateUser) // 注册限流

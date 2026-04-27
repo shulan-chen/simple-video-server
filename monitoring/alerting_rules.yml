@@ -1,0 +1,54 @@
+groups:
+  - name: video-server-alerts
+    rules:
+      - alert: HighErrorRate
+        expr: >
+          sum(rate(web_http_requests_total{status=~"5.."}[5m]))
+          /
+          sum(rate(web_http_requests_total[5m]))
+          * 100 > 5
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "5xx 错误率超过 5%"
+          description: "当前错误率 {{ $value | printf \"%.2f\" }}%，持续超过 2 分钟"
+
+      - alert: CircuitBreakerOpen
+        expr: web_circuit_breaker_state == 1
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "熔断器 {{ $labels.circuit }} 已打开"
+          description: "下游服务 {{ $labels.circuit }} 熔断器处于 OPEN 状态，请求被快速失败"
+
+      - alert: HighP99Latency
+        expr: >
+          histogram_quantile(0.99,
+            sum(rate(web_http_request_duration_seconds_bucket[5m])) by (le)
+          ) > 2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "P99 请求延迟超过 2 秒"
+          description: "当前 P99 延迟 {{ $value | printf \"%.2f\" }}s，持续超过 5 分钟"
+
+      - alert: HighRateLimitRejects
+        expr: sum(rate(web_rate_limit_rejects_total[1m])) > 10
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "限流拒绝率过高（> 10 req/s）"
+          description: "当前限流拒绝速率 {{ $value | printf \"%.1f\" }} req/s"
+
+      - alert: WebServiceDown
+        expr: up{job="video-server-web"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Web 服务不可达"
+          description: "Prometheus 无法抓取 web-service 的指标，服务可能已宕机"

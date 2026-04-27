@@ -220,6 +220,47 @@ swagger-check:
 		echo "安装命令: go install github.com/swaggo/swag/cmd/swag@v1.8.12"; \
 	fi
 
+# ========== 一次性迁移工具 ==========
+
+# 将数据库中的预签名封面URL迁移为永久公开URL（只需执行一次）
+.PHONY: fix-thumbnails
+fix-thumbnails:
+	@echo "🔧 迁移封面URL（预签名 → 永久公开）..."
+	go run ./cmd/tools/fix_thumbnails/main.go
+	@echo "✅ 迁移完成！"
+
+# ========== 监控命令 ==========
+
+# 启动监控组件（Prometheus + Grafana）
+.PHONY: monitor-start
+monitor-start:
+	@echo "启动监控组件..."
+	docker-compose up -d prometheus grafana
+	@echo "✅ 监控组件已启动！"
+	@echo "  - Prometheus: http://localhost:9091"
+	@echo "  - Grafana:    http://localhost:3000  (admin / admin123)"
+
+# 停止监控组件
+.PHONY: monitor-stop
+monitor-stop:
+	docker-compose stop prometheus grafana
+
+# 查看监控状态
+.PHONY: monitor-health
+monitor-health:
+	@echo "Prometheus:" && \
+		if curl -s -f http://localhost:9091/-/ready > /dev/null 2>&1; then \
+			echo "✅ Prometheus 正常"; \
+		else \
+			echo "❌ Prometheus 不可用"; \
+		fi
+	@echo "Grafana:" && \
+		if curl -s -f http://localhost:3000/api/health > /dev/null 2>&1; then \
+			echo "✅ Grafana 正常"; \
+		else \
+			echo "❌ Grafana 不可用"; \
+		fi
+
 # ========== 数据库Migration命令 ==========
 
 # 升级数据库到最新版本
@@ -274,6 +315,11 @@ help:
 	@echo "  make start          - 后台启动所有服务"
 	@echo "  make stop           - 停止所有服务"
 	@echo "  make restart        - 重启所有服务"
+	@echo ""
+	@echo "=== 监控 ==="
+	@echo "  make monitor-start  - 启动 Prometheus + Grafana"
+	@echo "  make monitor-stop   - 停止监控组件"
+	@echo "  make monitor-health - 检查监控组件健康状态"
 	@echo ""
 	@echo "=== 数据库Migration ==="
 	@echo "  make migrate-up     - 升级数据库到最新版本"

@@ -1,14 +1,17 @@
 package api
 
 import (
+	"context"
 	"database/sql"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 	"video-server/api/cache"
 	"video-server/api/dbops"
 	api "video-server/api/defs"
 	"video-server/api/utils"
+	"video-server/stream"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
@@ -20,6 +23,10 @@ const (
 	HEADER_FILED_UNAME   = "X-User-Name"
 	HEADER_FILED_UID     = "X-User-Id"
 )
+
+// thumbnailSignedURLTTL 封面签名 URL 的有效期。
+// 签名 URL 只在响应时现生成，不存入数据库，TTL 只影响客户端缓存时间。
+const thumbnailSignedURLTTL = 7 * 24 * time.Hour
 
 // CreateUser 用户注册
 // @Summary      用户注册
@@ -382,15 +389,16 @@ func GetUserInfo(c *gin.Context) {
 	c.JSON(http.StatusOK, user)
 }
 
-// AddNewVideo 添加视频（事务性上传：文件 + 元数据）
+// AddNewVideo 添加视频（事务性上传：视频文件 + 封面 + 元数据，全部由后端处理）
 // @Summary      上传视频
-// @Description  事务性上传视频文件和元数据，保证一致性
+// @Description  一次请求上传视频文件和封面，后端内部生成 vid、上传 OSS、写入数据库
 // @Tags         视频管理
 // @Accept       multipart/form-data
 // @Produce      json
-// @Param        user_name   path      string  true   "用户名"
-// @Param        file        formData  file    true   "视频文件"
-// @Param        video_name  formData  string  true   "视频名称"
+// @Param        user_name   path      string  true  "用户名"
+// @Param        file        formData  file    true  "视频文件"
+// @Param        thumbnail   formData  file    true  "封面图片"
+// @Param        video_name  formData  string  true  "视频名称"
 // @Success      200         {object}  api.VideoInfo
 // @Failure      400         {object}  utils.AppError
 // @Failure      401         {object}  utils.AppError  "未登录或登录过期"
@@ -407,123 +415,121 @@ func AddNewVideo(c *gin.Context) {
 		zap.String("user_name", userName),
 		zap.String("user_id", userID))
 
-	// 解析 multipart 表单
-	if err := c.Request.ParseMultipartForm(100 << 20); err != nil { // 100MB
-		utils.Logger.Error("解析表单失败",
-			zap.String("trace_id", traceID),
-			zap.Error(err))
+	if err := c.Request.ParseMultipartForm(200 << 20); err != nil { // 200MB（视频+封面）
 		utils.AbortWithError(c, utils.ErrAPIInvalidRequest, err)
 		return
 	}
 
-	// 获取文件
-	file, header, err := c.Request.FormFile("file")
+	// 获取视频文件
+	videoFile, videoHeader, err := c.Request.FormFile("file")
 	if err != nil {
-		utils.Logger.Error("获取上传文件失败",
-			zap.String("trace_id", traceID),
-			zap.Error(err))
-		utils.AbortWithError(c, utils.ErrAPIInvalidRequest, err)
+		utils.AbortWithErrorMsg(c, utils.ErrAPIInvalidRequest, "缺少视频文件")
 		return
 	}
-	defer file.Close()
+	defer videoFile.Close()
+
+	// 获取封面文件
+	thumbnailFile, _, err := c.Request.FormFile("thumbnail")
+	if err != nil {
+		utils.AbortWithErrorMsg(c, utils.ErrAPIInvalidRequest, "缺少封面图片")
+		return
+	}
+	defer thumbnailFile.Close()
 
 	// 获取视频名称
 	videoName := c.PostForm("video_name")
 	if videoName == "" {
-		utils.Logger.Error("缺少视频名称",
-			zap.String("trace_id", traceID))
 		utils.AbortWithErrorMsg(c, utils.ErrAPIInvalidRequest, "缺少 video_name 参数")
 		return
 	}
 
-	// 获取缩略图URL（必需，前端先上传到OSS）
-	thumbnailUrl := c.PostForm("thumbnail_url")
-	if thumbnailUrl == "" {
-		utils.Logger.Error("缺少缩略图URL",
-			zap.String("trace_id", traceID))
-		utils.AbortWithErrorMsg(c, utils.ErrAPIInvalidRequest, "缺少 thumbnail_url 参数")
-		return
-	}
-
-	// 解析 user_id
 	userIDInt, _ := strconv.Atoi(userID)
 
-	// ========== 事务性操作开始 ==========
-
-	// 步骤1：创建数据库记录
+	// ========== 步骤1：生成 vid，写入数据库 ==========
 	videoInfo, err := dbops.AddNewVideo("", userIDInt, videoName, "")
 	if err != nil {
 		utils.Logger.Error("创建视频记录失败",
 			zap.String("trace_id", traceID),
-			zap.String("video_name", videoName),
 			zap.Error(err))
 		utils.AbortWithError(c, utils.ErrAPIDBInsert, err)
 		return
 	}
-
 	videoID := videoInfo.Vid
-	utils.Logger.Info("数据库记录创建成功，开始上传文件",
-		zap.String("trace_id", traceID),
-		zap.String("video_id", videoID))
 
-	// 步骤2：调用 Stream 服务上传文件
-	// 重置文件读取位置
-	file.Seek(0, 0)
-	contentType := header.Header.Get("Content-Type")
-
-	if err := UploadVideoToStream(videoID, file, contentType); err != nil {
-		utils.Logger.Error("上传文件到Stream失败，回滚删除数据库记录",
-			zap.String("trace_id", traceID),
-			zap.String("video_id", videoID),
-			zap.Error(err))
-
-		// 回滚：删除数据库记录
+	rollback := func() {
 		if deleteErr := dbops.DeleteVideoInfo(videoID); deleteErr != nil {
-			utils.Logger.Error("回滚删除数据库记录失败",
+			utils.Logger.Error("回滚删除DB记录失败",
 				zap.String("trace_id", traceID),
 				zap.String("video_id", videoID),
 				zap.Error(deleteErr))
-		} else {
-			utils.Logger.Info("已回滚删除数据库记录",
-				zap.String("trace_id", traceID),
-				zap.String("video_id", videoID))
 		}
+	}
 
+	// ========== 步骤2：上传视频到 Stream 服务（保留限流能力）==========
+	videoFile.Seek(0, 0)
+	contentType := videoHeader.Header.Get("Content-Type")
+	if err := UploadVideoToStream(videoID, videoFile, contentType); err != nil {
+		utils.Logger.Error("上传视频到OSS失败，回滚",
+			zap.String("trace_id", traceID),
+			zap.String("video_id", videoID),
+			zap.Error(err))
+		rollback()
 		utils.AbortWithError(c, utils.ErrAPIDBInsert, err)
 		return
 	}
 
-	// ========== 事务性操作成功 ==========
-
-	// 步骤3：更新缩略图URL
-	if err := dbops.UpdateVideoThumbnail(videoID, thumbnailUrl); err != nil {
-		utils.Logger.Error("更新缩略图URL失败",
+	// ========== 步骤3：直接上传封面到 OSS（API 服务内部调用，不经过 HTTP）==========
+	thumbnailKey := "titlePage/" + videoID + ".jpg"
+	if err := stream.UploadToOSS(c.Request.Context(), thumbnailKey, thumbnailFile, "image/jpeg"); err != nil {
+		utils.Logger.Error("上传封面到OSS失败，回滚",
 			zap.String("trace_id", traceID),
 			zap.String("video_id", videoID),
 			zap.Error(err))
-		// 缩略图更新失败也认为上传失败，回滚
-		if deleteErr := dbops.DeleteVideoInfo(videoID); deleteErr != nil {
-			utils.Logger.Error("回滚删除数据库记录失败",
-				zap.String("trace_id", traceID),
-				zap.String("video_id", videoID),
-				zap.Error(deleteErr))
-		}
+		rollback()
+		utils.AbortWithError(c, utils.ErrAPIDBInsert, err)
+		return
+	}
+
+	// ========== 步骤4：更新封面 object key 到数据库 ==========
+	if err := dbops.UpdateVideoThumbnail(videoID, thumbnailKey); err != nil {
+		utils.Logger.Error("更新封面记录失败，回滚",
+			zap.String("trace_id", traceID),
+			zap.String("video_id", videoID),
+			zap.Error(err))
+		rollback()
 		utils.AbortWithError(c, utils.ErrAPIDBUpdate, err)
 		return
 	}
 
-	// 使相关缓存失效
 	ctx := c.Request.Context()
-	cache.InvalidateAllVideos(ctx)             // 全部视频列表
-	cache.InvalidateUserVideos(ctx, userIDInt) // 用户视频列表
+	cache.InvalidateAllVideos(ctx)
+	cache.InvalidateUserVideos(ctx, userIDInt)
 
-	utils.Logger.Debug("视频上传完成（文件+元数据+缩略图）",
+	utils.Logger.Info("视频上传完成",
 		zap.String("trace_id", traceID),
 		zap.String("user_name", userName),
 		zap.String("video_id", videoID),
 		zap.String("video_name", videoName))
 
+	videoInfo.ThumbnailUrl = thumbnailKey
 	c.JSON(http.StatusOK, videoInfo)
+}
+
+// enrichThumbnailURLs 将视频列表中存储的 object key 转换为签名 URL。
+// DB 存的是 object key（如 "titlePage/xxx.jpg"），响应时现生成签名 URL 避免过期问题。
+func enrichThumbnailURLs(ctx context.Context, videos []*api.VideoInfo) {
+	for _, v := range videos {
+		if v.ThumbnailUrl == "" || strings.HasPrefix(v.ThumbnailUrl, "http") {
+			continue
+		}
+		signedURL, err := stream.GetOSSSignedURL(ctx, v.ThumbnailUrl, thumbnailSignedURLTTL)
+		if err != nil {
+			utils.Logger.Warn("生成封面签名URL失败", zap.String("vid", v.Vid), zap.Error(err))
+			v.ThumbnailUrl = ""
+			continue
+		}
+		v.ThumbnailUrl = signedURL
+	}
 }
 
 // ListUserAllVideos 获取用户视频列表
@@ -572,8 +578,10 @@ func ListUserAllVideos(c *gin.Context) {
 		utils.AbortWithError(c, utils.ErrAPIDBQuery, err)
 		return
 	}
+	//需要查数据库，也就需要再次签名生成URL
+	enrichThumbnailURLs(c.Request.Context(), videoInfos)
 
-	// 3. 写入缓存
+	// 3. 写入缓存（存签名 URL，但必须保证签名时长大于缓存时长）
 	if err := cache.SetUserVideos(c.Request.Context(), uidInt, videoInfos); err != nil {
 		utils.Logger.Warn("写入用户视频列表缓存失败",
 			zap.String("trace_id", traceID),
@@ -617,8 +625,9 @@ func ListAllVideos(c *gin.Context) {
 		utils.AbortWithError(c, utils.ErrAPIDBQuery, err)
 		return
 	}
+	enrichThumbnailURLs(c.Request.Context(), videoInfos)
 
-	// 3. 写入缓存
+	// 3. 写入缓存（存签名 URL，但必须保证签名时长大于缓存时长）
 	if err := cache.SetAllVideos(c.Request.Context(), videoInfos); err != nil {
 		utils.Logger.Warn("写入全部视频列表缓存失败",
 			zap.String("trace_id", traceID),

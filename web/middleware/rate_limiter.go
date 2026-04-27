@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"video-server/api/utils"
+	"video-server/web/metrics"
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang/groupcache/lru"
@@ -101,6 +102,7 @@ func GlobalRateLimiter() gin.HandlerFunc {
 		ip := c.ClientIP()
 
 		if !globalLimiter.Allow(ip) {
+			metrics.RecordRateLimitReject("global")
 			utils.Logger.Warn("全局请求频率超限",
 				zap.String("trace_id", traceID),
 				zap.String("ip", ip),
@@ -124,6 +126,7 @@ func APIProxyRateLimiter() gin.HandlerFunc {
 		}
 
 		if !apiProxyLimiter.Allow(key) {
+			metrics.RecordRateLimitReject("api-proxy")
 			utils.Logger.Warn("API透传请求频率超限",
 				zap.String("trace_id", traceID),
 				zap.String("key", key),
@@ -146,6 +149,7 @@ func VideoProxyRateLimiter() gin.HandlerFunc {
 		}
 
 		if !videoProxyLimiter.Allow(key) {
+			metrics.RecordRateLimitReject("video-proxy")
 			utils.Logger.Warn("视频代理请求频率超限",
 				zap.String("trace_id", traceID),
 				zap.String("key", key),
