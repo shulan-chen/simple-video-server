@@ -6,7 +6,7 @@
 #
 # 当前配置等同于 docker-compose.prod.yml
 
-version: '3.3'
+version: '3.7'
 
 services:
   api-service:
@@ -44,8 +44,7 @@ services:
     environment:
       - CONFIG_PATH=/app/config/config.json
     depends_on:
-      api-service:
-        condition: service_healthy
+      - api-service
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health/ready"]
       interval: 10s
@@ -111,9 +110,8 @@ services:
       - "--storage.tsdb.path=/prometheus"
       - "--storage.tsdb.retention.time=7d"
       - "--web.enable-lifecycle"
-    depends_on:
-      web-service:
-        condition: service_healthy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     networks:
       - video-network
     restart: unless-stopped

@@ -8,5 +8,7 @@ rule_files:
 scrape_configs:
   - job_name: "video-server-web"
     static_configs:
-      - targets: ["web-service:8080"]
+      # make start 本地运行：使用 host.docker.internal 访问宿主机
+      # docker-compose 全容器运行：改为 web-service:8080
+      - targets: ["host.docker.internal:8080"]
     metrics_path: /metrics
