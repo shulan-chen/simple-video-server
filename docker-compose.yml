@@ -24,7 +24,7 @@ services:
       - REDIS_ADDR=139.196.242.169:6379
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health/ready"]
-      interval: 10s
+      interval: 60s
       timeout: 5s
       retries: 3
       start_period: 30s
@@ -43,11 +43,13 @@ services:
       - "8080:8080"
     environment:
       - CONFIG_PATH=/app/config/config.json
+      - API_ADDR=http://api-service:8000
+      - STREAM_ADDR=http://stream-service:9090
     depends_on:
       - api-service
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health/ready"]
-      interval: 10s
+      interval: 60s
       timeout: 5s
       retries: 3
     networks:
@@ -67,7 +69,7 @@ services:
       - CONFIG_PATH=/app/config/config.json
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9090/health/ready"]
-      interval: 10s
+      interval: 60s
       timeout: 5s
       retries: 3
     networks:
@@ -89,7 +91,7 @@ services:
       - REDIS_ADDR=139.196.242.169:6379
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8001/health/ready"]
-      interval: 10s
+      interval: 60s
       timeout: 5s
       retries: 3
     networks:

@@ -54,9 +54,8 @@ WORKDIR /app
 # 从构建阶段复制二进制文件
 COPY --from=builder /build/service /app/service
 
-# 复制配置文件和模板
+# 复制配置文件
 COPY --chown=appuser:appuser config /app/config
-COPY --chown=appuser:appuser templates /app/templates
 
 # 创建日志目录
 RUN mkdir -p /app/logs && chown -R appuser:appuser /app
