@@ -33,6 +33,9 @@ type Configuration struct {
 	RedisPwd  string `mapstructure:"redis_pwd"`
 	RedisDB   int    `mapstructure:"redis_db"`
 
+	// Kafka配置
+	KafkaAddr string `mapstructure:"kafka_addr"` // Kafka broker 地址，如 localhost:9092
+
 	// 定时任务配置
 	VideoDeleteDelayTime int `mapstructure:"video_delete_delay_time"` // 视频删除延迟时间（秒）
 	VideoDeleteBatchSize int `mapstructure:"video_delete_batch_size"` // 每次处理的视频数量

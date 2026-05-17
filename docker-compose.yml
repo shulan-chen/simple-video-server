@@ -22,6 +22,7 @@ services:
       - CONFIG_PATH=/app/config/config.json
       - DB_ADDR=139.196.242.169:3306
       - REDIS_ADDR=139.196.242.169:6379
+      - KAFKA_ADDR=kafka:9092
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health/ready"]
       interval: 60s
@@ -89,6 +90,7 @@ services:
       - CONFIG_PATH=/app/config/config.json
       - DB_ADDR=139.196.242.169:3306
       - REDIS_ADDR=139.196.242.169:6379
+      - KAFKA_ADDR=kafka:9092
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8001/health/ready"]
       interval: 60s
@@ -96,6 +98,35 @@ services:
       retries: 3
     networks:
       - video-network
+    restart: unless-stopped
+
+  kafka:
+    image: apache/kafka:3.9.0
+    container_name: video-server-kafka
+    ports:
+      - "9092:9092"   # 容器内部通信（服务名 kafka:9092）
+      - "9094:9094"   # 宿主机访问（localhost:9094，用于本地调试）
+    environment:
+      - KAFKA_NODE_ID=1
+      - KAFKA_PROCESS_ROLES=broker,controller
+      - KAFKA_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:9094
+      - KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092,EXTERNAL://localhost:9094
+      - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT
+      - KAFKA_CONTROLLER_QUORUM_VOTERS=1@localhost:9093
+      - KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER
+      - KAFKA_AUTO_CREATE_TOPICS_ENABLE=true
+      - KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1
+      - KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS=0
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    networks:
+      - video-network
+    healthcheck:
+      test: ["CMD", "/opt/kafka/bin/kafka-topics.sh", "--bootstrap-server", "localhost:9092", "--list"]
+      interval: 60s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
     restart: unless-stopped
 
   prometheus:
@@ -144,3 +175,4 @@ networks:
 volumes:
   prometheus-data:
   grafana-data:
+  kafka-data:
